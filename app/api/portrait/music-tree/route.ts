@@ -24,7 +24,9 @@ interface TrackLeaf {
 
 interface ArtistBranch {
   name: string;
-  count: number;
+  count: number;          // internal sort weight (not user-facing)
+  rank?: number | null;   // 1-based rank in top-artists list, if any
+  recentPlays?: number;   // actual plays in the recently-played window (<=50)
   genres?: string[];
   tracks: TrackLeaf[];
 }
@@ -85,35 +87,48 @@ async function buildFromSpotify(userId: string) {
 
   const artistScore = new Map<
     string,
-    { name: string; score: number; image: string | null; genres: string[] }
+    {
+      name: string;
+      score: number;
+      rank: number | null;
+      recentPlays: number;
+      image: string | null;
+      genres: string[];
+    }
   >();
 
-  // Top artists: weight 3, rank-scaled
+  // Top artists: weight 3, rank-scaled (internal sort signal only)
   (topArtistsResp?.items ?? []).forEach((a, i) => {
     const prev = artistScore.get(a.id) ?? {
       name: a.name,
       score: 0,
+      rank: null,
+      recentPlays: 0,
       image: a.images[0]?.url ?? null,
       genres: a.genres ?? [],
     };
     prev.score += 3 * Math.max(1, 20 - i);
+    prev.rank = i + 1; // 1-based rank
     if ((!prev.genres || prev.genres.length === 0) && a.genres?.length) {
       prev.genres = a.genres;
     }
     artistScore.set(a.id, prev);
   });
 
-  // Recent plays: weight 1 per play
+  // Recent plays: count actual plays (and use them as a small sort nudge)
   (recentResp?.items ?? []).forEach((item) => {
     const artist = item.track.artists[0];
     if (!artist) return;
     const prev = artistScore.get(artist.id) ?? {
       name: artist.name,
       score: 0,
+      rank: null,
+      recentPlays: 0,
       image: item.track.album.images[0]?.url ?? null,
       genres: [],
     };
     prev.score += 1;
+    prev.recentPlays += 1;
     artistScore.set(artist.id, prev);
   });
 
@@ -153,6 +168,8 @@ async function buildFromSpotify(userId: string) {
     .map(([id, meta]) => ({
       name: meta.name,
       count: Math.round(meta.score),
+      rank: meta.rank,
+      recentPlays: meta.recentPlays,
       genres: meta.genres,
       tracks: (tracksByArtist.get(id) ?? []).slice(0, MAX_TRACKS_PER_ARTIST),
     }))
@@ -165,6 +182,8 @@ async function buildFromSpotify(userId: string) {
     top.push({
       name: `${rest.length} more`,
       count: rest.reduce((sum, a) => sum + a.count, 0),
+      rank: null,
+      recentPlays: rest.reduce((sum, a) => sum + (a.recentPlays ?? 0), 0),
       genres: [],
       tracks: rest
         .flatMap((a) => a.tracks)
@@ -224,7 +243,8 @@ async function buildFromPairings(userId: string) {
   const byArtist = new Map<string, ArtistBranch>();
   for (const p of pairings) {
     const key = p.artistName.trim();
-    if (!byArtist.has(key)) byArtist.set(key, { name: key, count: 0, tracks: [] });
+    if (!byArtist.has(key))
+      byArtist.set(key, { name: key, count: 0, rank: null, recentPlays: 0, tracks: [] });
     const branch = byArtist.get(key)!;
     branch.count++;
     if (branch.tracks.length < MAX_TRACKS_PER_ARTIST) {
@@ -249,12 +269,19 @@ async function buildFromPairings(userId: string) {
     top.push({
       name: `${rest.length} more`,
       count: rest.reduce((sum, a) => sum + a.count, 0),
+      rank: null,
+      recentPlays: 0,
       tracks: rest
         .flatMap((a) => a.tracks)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, MAX_TRACKS_PER_ARTIST),
     });
   }
+
+  // Assign ranks so the UI can display #1, #2, ... for the Pairings fallback too
+  top.forEach((b, i) => {
+    if (b.name !== `${rest.length} more`) b.rank = i + 1;
+  });
 
   return {
     source: "pairings",

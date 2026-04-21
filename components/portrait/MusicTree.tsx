@@ -21,7 +21,9 @@ interface TrackLeaf {
 
 interface ArtistBranch {
   name: string;
-  count: number;
+  count: number;           // internal weight
+  rank?: number | null;    // 1-based rank in Spotify's top-artists list
+  recentPlays?: number;    // actual plays in the recently-played window
   genres?: string[];
   tracks: TrackLeaf[];
 }
@@ -88,8 +90,9 @@ export function MusicTree() {
       <div className="flex items-center justify-between border-b border-earth/10 px-4 py-3">
         <p className="label">Music tree</p>
         <p className="font-mono text-xs text-earth/30">
-          {data.source === "spotify" ? "Last 4 weeks · " : ""}
-          {data.totalArtists} artist{data.totalArtists === 1 ? "" : "s"}
+          {data.source === "spotify"
+            ? `Last 4 weeks · top ${data.totalArtists}`
+            : `${data.totalArtists} artist${data.totalArtists === 1 ? "" : "s"}`}
         </p>
       </div>
 
@@ -421,7 +424,8 @@ function TreeCanvas({
               y={p.tipY}
               side={p.side}
               name={p.branch.name}
-              count={p.branch.count}
+              rank={p.branch.rank}
+              recentPlays={p.branch.recentPlays}
               nodeRadius={p.nodeRadius}
             />
           </g>
@@ -452,14 +456,16 @@ function ArtistLabel({
   y,
   side,
   name,
-  count,
+  rank,
+  recentPlays,
   nodeRadius,
 }: {
   x: number;
   y: number;
   side: "L" | "R";
   name: string;
-  count: number;
+  rank: number | null | undefined;
+  recentPlays: number | undefined;
   nodeRadius: number;
 }) {
   const sideSign = side === "R" ? 1 : -1;
@@ -468,6 +474,17 @@ function ArtistLabel({
   const ly = y + 0.6;
   const anchor = side === "R" ? "start" : "end";
   const display = name.length > 22 ? `${name.slice(0, 20)}…` : name;
+
+  // Build an honest meta string. Spotify Web API does not expose true play
+  // counts, so we show rank (#1, #2, ...) and — if any — real plays from the
+  // recently-played window.
+  const parts: string[] = [];
+  if (rank && rank > 0) parts.push(`#${rank}`);
+  if (recentPlays && recentPlays > 0) {
+    parts.push(`${recentPlays} recent play${recentPlays === 1 ? "" : "s"}`);
+  }
+  const meta = parts.join(" · ");
+
   return (
     <>
       <text
@@ -483,19 +500,21 @@ function ArtistLabel({
       >
         {display}
       </text>
-      <text
-        x={lx}
-        y={ly + 3}
-        textAnchor={anchor}
-        className="fill-earth/50"
-        style={{
-          fontSize: "2.1px",
-          fontFamily: "IBM Plex Mono, monospace",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {count} plays
-      </text>
+      {meta && (
+        <text
+          x={lx}
+          y={ly + 3}
+          textAnchor={anchor}
+          className="fill-earth/50"
+          style={{
+            fontSize: "2.1px",
+            fontFamily: "IBM Plex Mono, monospace",
+            letterSpacing: "0.05em",
+          }}
+        >
+          {meta}
+        </text>
+      )}
     </>
   );
 }
