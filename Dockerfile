@@ -5,10 +5,10 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY prisma ./prisma
 COPY . .
-# bust cache: 2
+# bust cache: 3
 RUN DATABASE_URL="postgresql://placeholder:5432/atlas" npx prisma generate
 RUN npm run build
 ENV HOSTNAME="0.0.0.0"
 ENV NODE_ENV="production"
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed.ts; node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}"]
