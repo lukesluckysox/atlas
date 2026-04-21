@@ -5,11 +5,30 @@
 @tailwind utilities;
 
 :root {
+  /* RGB triplets so Tailwind can apply opacity via <alpha-value> */
+  --c-parchment: 245 240 232;   /* #F5F0E8 */
+  --c-earth: 44 24 16;          /* #2C1810 */
+  --c-earth-light: 74 46 32;    /* #4A2E20 */
+
+  /* Legacy hex refs still used by hand-authored CSS below */
   --parchment: #F5F0E8;
   --earth: #2C1810;
   --amber: #D4A843;
   --sage: #7A8C6E;
   --terracotta: #C17F5A;
+}
+
+html.dark {
+  --c-parchment: 26 18 14;      /* deep earth as new "background" */
+  --c-earth: 239 232 220;       /* warm off-white ink on dark */
+  --c-earth-light: 210 200 185;
+
+  --parchment: #1A120E;
+  --earth: #EFE8DC;
+}
+
+html, body {
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 * {
@@ -36,6 +55,10 @@ body::before {
   pointer-events: none;
   z-index: 100;
   opacity: 0.4;
+}
+
+html.dark body::before {
+  opacity: 0.18;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -5,6 +5,15 @@ declare module "next-auth" {
     user: {
       id: string;
       isPro: boolean;
+      username?: string | null;
     } & DefaultSession["user"];
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string;
+    isPro?: boolean;
+    username?: string | null;
   }
 }

@@ -100,14 +100,16 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = (user as { id: string }).id;
       }
-      // On every request, refresh isPro from DB so Stripe upgrades propagate.
+      // On every request, refresh isPro + username from DB so Stripe upgrades
+      // and profile edits propagate.
       if (token.id) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { isPro: true },
+            select: { isPro: true, username: true },
           });
           token.isPro = dbUser?.isPro ?? false;
+          token.username = dbUser?.username ?? null;
         } catch (err) {
           console.error("[auth] jwt callback db lookup failed:", err);
         }
@@ -118,6 +120,7 @@ export const authOptions: NextAuthOptions = {
       if (session?.user && token?.id) {
         session.user.id = token.id as string;
         session.user.isPro = (token.isPro as boolean) ?? false;
+        session.user.username = (token.username as string | null) ?? null;
       }
       return session;
     },

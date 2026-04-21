@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,12 +10,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        parchment: "#F5F0E8",
-        earth: "#2C1810",
+        // Theme-aware via CSS vars — swap in globals.css on html.dark
+        parchment: "rgb(var(--c-parchment) / <alpha-value>)",
+        earth: "rgb(var(--c-earth) / <alpha-value>)",
+        "earth-light": "rgb(var(--c-earth-light) / <alpha-value>)",
+        // Brand accents stay the same in both modes
         amber: "#D4A843",
         sage: "#7A8C6E",
         terracotta: "#C17F5A",
-        "earth-light": "#4A2E20",
         "amber-light": "#E8C47A",
         "sage-light": "#9BAD8E",
       },
