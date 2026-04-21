@@ -5,6 +5,7 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY prisma ./prisma
 COPY . .
+# bust cache: 2
 RUN DATABASE_URL="postgresql://placeholder:5432/atlas" npx prisma generate
 RUN npm run build
 ENV HOSTNAME="0.0.0.0"
