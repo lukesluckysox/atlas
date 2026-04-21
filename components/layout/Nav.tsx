@@ -8,10 +8,10 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home" },
-  { href: "/pair", label: "Taste" },
-  { href: "/map", label: "Experience" },
+  { href: "/pair", label: "Tracks" },
+  { href: "/map", label: "Path" },
   { href: "/encounter", label: "Encounter" },
-  { href: "/mark", label: "Mark" },
+  { href: "/mark", label: "Notice" },
   { href: "/explore", label: "Archive" },
   { href: "/portrait", label: "Portrait" },
 ];
@@ -54,7 +54,7 @@ export function Nav() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-parchment/95 backdrop-blur-sm border-b border-earth/10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/home" className="font-serif text-xl text-earth tracking-tight">
-            Atlas
+            Trace
           </Link>
 
           <div className="hidden md:flex items-center gap-8">

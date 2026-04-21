@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
     const res = await fetch(url, {
       headers: {
         // Nominatim requires a UA identifying the app.
-        "User-Agent": "Atlas (https://atlas-production-df1b.up.railway.app)",
+        "User-Agent": "Trace (https://atlas-production-df1b.up.railway.app)",
         "Accept-Language": "en",
       },
       // Soft cache so we don't hammer the free service.

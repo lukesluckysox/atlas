@@ -213,7 +213,7 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
       <div className="flex items-end justify-between mb-8">
         <div>
-          <p className="label mb-2">Experience</p>
+          <p className="label mb-2">Path</p>
           <h1 className="font-serif text-4xl text-earth">Life map</h1>
         </div>
         <button

@@ -5,13 +5,13 @@ import { Toaster } from "react-hot-toast";
 import { themeInitScript } from "@/components/theme/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Atlas — A portrait of who you are",
-  description: "Atlas builds a portrait of who you are. Not through introspection. Through what you love, where you've been, and what sounds right.",
+  title: "Trace — A portrait of who you are",
+  description: "Trace builds a portrait of who you are. Not through introspection. Through what you love, where you've been, and what sounds right.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Atlas",
+    title: "Trace",
   },
   icons: {
     icon: "/icon-192.png",

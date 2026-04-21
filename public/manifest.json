@@ -1,6 +1,6 @@
 {
-  "name": "Atlas",
-  "short_name": "Atlas",
+  "name": "Trace",
+  "short_name": "Trace",
   "description": "A portrait of who you are. Not through introspection.",
   "start_url": "/home",
   "display": "standalone",
@@ -29,9 +29,9 @@
       "description": "Create a new photo/track pairing"
     },
     {
-      "name": "Mark",
+      "name": "Notice",
       "url": "/mark",
-      "description": "Mark an observation"
+      "description": "Notice an observation"
     },
     {
       "name": "Today's Question",

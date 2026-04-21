@@ -104,7 +104,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-page-in">
       <div className="mb-12">
-        <p className="label mb-2">Mark</p>
+        <p className="label mb-2">Notice</p>
         <p className="font-mono text-xs text-earth/40">
           What you noticed. One line, maybe a photo.
         </p>
@@ -125,7 +125,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
           <div className="relative mt-4 inline-block">
             <Image
               src={photoUrl}
-              alt="Mark photo"
+              alt="Notice photo"
               width={200}
               height={200}
               className="object-cover"
@@ -170,7 +170,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
               disabled={saving || !content.trim()}
               className="btn-primary text-xs px-4 py-2 disabled:opacity-40"
             >
-              {saving ? "..." : "Mark"}
+              {saving ? "..." : "Notice"}
             </button>
           </div>
         </div>
@@ -206,7 +206,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
                   <div className="mt-3">
                     <Image
                       src={mark.photoUrl}
-                      alt="Mark"
+                      alt="Notice"
                       width={240}
                       height={180}
                       className="object-cover"

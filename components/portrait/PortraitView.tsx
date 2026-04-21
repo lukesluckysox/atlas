@@ -56,7 +56,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
         <Compass size={32} className="text-amber mx-auto mb-8" />
         <h1 className="font-serif text-3xl text-earth mb-4">Not enough data yet.</h1>
         <p className="font-mono text-sm text-earth/50 mb-8 leading-relaxed">
-          Atlas needs more signal. Add some pairings, log some places, answer some questions.
+          Trace needs more signal. Add some pairings, log some places, answer some questions.
           Come back when you&apos;ve lived a little more.
         </p>
         <div className="grid grid-cols-2 gap-4 text-left mt-12">
@@ -86,7 +86,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
       <div className="flex items-end justify-between mb-12">
         <div>
           <p className="label mb-2">Portrait</p>
-          <h1 className="font-serif text-4xl text-earth">What Atlas sees.</h1>
+          <h1 className="font-serif text-4xl text-earth">What Trace sees.</h1>
         </div>
         <button
           onClick={generate}
@@ -111,7 +111,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <ProfileSection
-              title="Taste"
+              title="Tracks"
               data={portrait.tasteProfile as Record<string, unknown>}
               fields={[
                 { key: "musicalRange", label: "Musical range" },
@@ -142,7 +142,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
 
             {!!portrait.markProfile && (
               <ProfileSection
-                title="Mark"
+                title="Notice"
                 data={portrait.markProfile as Record<string, unknown>}
                 fields={[
                   { key: "observationStyle", label: "Observation style" },
@@ -177,7 +177,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
       ) : (
         <div className="border border-earth/10 p-16 text-center">
           <p className="font-mono text-sm text-earth/50 mb-8">
-            See what Atlas sees.
+            See what Trace sees.
           </p>
           <button
             onClick={generate}

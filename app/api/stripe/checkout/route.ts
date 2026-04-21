@@ -18,7 +18,7 @@ export async function POST(_req: NextRequest) {
       {
         price_data: {
           currency: "usd",
-          product_data: { name: "Atlas Pro", description: "Unlimited experiences, AI recommendations, portrait generation" },
+          product_data: { name: "Trace Pro", description: "Unlimited experiences, AI recommendations, portrait generation" },
           unit_amount: 800,
           recurring: { interval: "month" },
         },

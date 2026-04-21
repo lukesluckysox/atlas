@@ -14,12 +14,12 @@ export default async function LandingPage() {
   const pillars = [
     {
       id: "01",
-      name: "Taste",
+      name: "Tracks",
       description: "Photo and track pairings. Pure instinct. No analysis required.",
     },
     {
       id: "02",
-      name: "Experience",
+      name: "Path",
       description: "A life map. National parks, countries, concerts, trails, moments.",
     },
     {
@@ -29,7 +29,7 @@ export default async function LandingPage() {
     },
     {
       id: "04",
-      name: "Mark",
+      name: "Notice",
       description: "What you noticed. A cloud formation. A conversation fragment. Raw observation.",
     },
   ];
@@ -37,7 +37,7 @@ export default async function LandingPage() {
   return (
     <div className="min-h-screen bg-parchment flex flex-col">
       <header className="px-8 py-6 flex items-center justify-between">
-        <span className="font-serif text-2xl text-earth">Atlas</span>
+        <span className="font-serif text-2xl text-earth">Trace</span>
         <Link
           href="/auth/signin"
           className="font-mono text-xs text-earth/60 hover:text-earth tracking-widest uppercase transition-colors"
@@ -57,7 +57,7 @@ export default async function LandingPage() {
               Not through introspection.
             </h1>
             <p className="font-mono text-sm text-earth/60 max-w-md leading-relaxed mb-10">
-              Atlas builds a picture of who you are through what you love, where
+              Trace builds a picture of who you are through what you love, where
               you&apos;ve been, and what sounds right next to what image.
             </p>
             <Link
@@ -77,7 +77,7 @@ export default async function LandingPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/portrait-preview.svg"
-                alt="Sample Atlas portrait — the personality profile users generate from their pairings, experiences, encounters, and marks"
+                alt="Sample Trace portrait — the personality profile users generate from their pairings, experiences, encounters, and notices"
                 className="w-full h-auto block"
               />
             </div>
@@ -104,7 +104,7 @@ export default async function LandingPage() {
 
       <footer className="px-8 py-8 flex items-center justify-between border-t border-earth/10 mt-24">
         <span className="font-mono text-xs text-earth/30 tracking-widest">
-          Atlas — {new Date().getFullYear()}
+          Trace — {new Date().getFullYear()}
         </span>
         <div className="flex gap-6">
           <Link

@@ -98,7 +98,7 @@ export default function SignInContent() {
           href="/"
           className="block font-serif text-3xl text-earth mb-8 text-center"
         >
-          Atlas
+          Trace
         </Link>
 
 

@@ -19,7 +19,7 @@ export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
   if (pairings.length === 0) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-12">
-        <p className="label mb-2">Taste</p>
+        <p className="label mb-2">Tracks</p>
         <h1 className="font-serif text-4xl text-earth mb-16">Archive</h1>
         <div className="border border-earth/10 p-16 text-center">
           <p className="font-mono text-sm text-earth/40">
@@ -37,7 +37,7 @@ export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
     <div className="max-w-6xl mx-auto px-6 py-12 animate-page-in">
       <div className="flex items-end justify-between mb-12">
         <div>
-          <p className="label mb-2">Taste</p>
+          <p className="label mb-2">Tracks</p>
           <h1 className="font-serif text-4xl text-earth">Archive</h1>
         </div>
         <p className="font-mono text-xs text-earth/40">

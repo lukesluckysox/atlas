@@ -46,7 +46,7 @@ export function HomeDashboard({
             </blockquote>
             {encounterToday.landed === null || encounterToday.landed === undefined ? (
               <Link href="/encounter" className="btn-secondary inline-block text-sm">
-                Mark it
+                Notice it
               </Link>
             ) : (
               <p className="font-mono text-xs text-earth/40">
@@ -66,7 +66,7 @@ export function HomeDashboard({
               <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
                 New pairing
               </p>
-              <p className="font-mono text-xs text-earth/40">Taste</p>
+              <p className="font-mono text-xs text-earth/40">Tracks</p>
             </div>
           </Link>
           <Link
@@ -90,7 +90,7 @@ export function HomeDashboard({
             <Pencil size={18} className="text-amber" />
             <div>
               <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
-                Mark something
+                Notice something
               </p>
               <p className="font-mono text-xs text-earth/40">Raw observation</p>
             </div>

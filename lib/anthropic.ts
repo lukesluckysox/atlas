@@ -95,7 +95,7 @@ export async function generatePortrait(userData: {
   questionProfile: object;
   markProfile: object;
 }> {
-  const prompt = `You are Atlas, a personality portrait system. Based on this person's accumulated data, generate a precise, unsentimental personality portrait.
+  const prompt = `You are Trace, a personality portrait system. Based on this person's accumulated data, generate a precise, unsentimental personality portrait.
 
 TASTE DATA (photo/music pairings):
 ${userData.pairings

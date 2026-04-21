@@ -18,7 +18,7 @@ export function SettingsView({ user }: { user: User }) {
 
   useEffect(() => {
     if (success) {
-      toast.success("Welcome to Atlas Pro.");
+      toast.success("Welcome to Trace Pro.");
     }
   }, [success]);
 
@@ -80,7 +80,7 @@ export function SettingsView({ user }: { user: User }) {
                 {user.isPro ? (
                   <span className="flex items-center gap-2">
                     <Check size={12} className="text-amber" />
-                    Atlas Pro
+                    Trace Pro
                   </span>
                 ) : (
                   "Free"
@@ -92,7 +92,7 @@ export function SettingsView({ user }: { user: User }) {
 
         {!user.isPro && (
           <section>
-            <p className="label mb-6">Atlas Pro</p>
+            <p className="label mb-6">Trace Pro</p>
             <div className="border border-amber/30 p-8">
               <p className="font-serif text-xl text-earth mb-6">$8 / month</p>
               <ul className="space-y-3 mb-8">
