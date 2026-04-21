@@ -7,20 +7,22 @@ datasource db {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  name        String?
-  image       String?
-  isPro       Boolean      @default(false)
-  stripeId    String?
-  createdAt   DateTime     @default(now())
-  pairings    Pairing[]
-  experiences Experience[]
-  encounters  Encounter[]
-  marks       Mark[]
-  portrait    Portrait?
-  accounts    Account[]
-  sessions    Session[]
+  id           String       @id @default(cuid())
+  email        String       @unique
+  username     String?      @unique
+  passwordHash String?
+  name         String?
+  image        String?
+  isPro        Boolean      @default(false)
+  stripeId     String?
+  createdAt    DateTime     @default(now())
+  pairings     Pairing[]
+  experiences  Experience[]
+  encounters   Encounter[]
+  marks        Mark[]
+  portrait     Portrait?
+  accounts     Account[]
+  sessions     Session[]
 }
 
 model Account {

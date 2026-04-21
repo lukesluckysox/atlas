@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" fill="none">
+  <defs>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.17  0 0 0 0 0.09  0 0 0 0 0.06  0 0 0 0.06 0"/>
+    </filter>
+    <radialGradient id="glow" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#D4A843" stop-opacity="0.35"/>
+      <stop offset="55%" stop-color="#D4A843" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#D4A843" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Card body -->
+  <rect x="0" y="0" width="480" height="320" fill="#F5F0E8"/>
+  <rect x="0" y="0" width="480" height="320" fill="url(#glow)"/>
+  <rect x="0" y="0" width="480" height="320" filter="url(#grain)" opacity="0.5"/>
+
+  <!-- Border -->
+  <rect x="0.5" y="0.5" width="479" height="319" stroke="#2C1810" stroke-opacity="0.12" fill="none"/>
+
+  <!-- Top bar: label + date -->
+  <text x="24" y="34" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="2.4" fill="#2C1810" fill-opacity="0.5">PORTRAIT — ATLAS</text>
+  <text x="456" y="34" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="1.5" fill="#2C1810" fill-opacity="0.4" text-anchor="end">APR 2026</text>
+
+  <!-- Amber accent bar + headline -->
+  <rect x="24" y="56" width="2" height="66" fill="#D4A843"/>
+  <text x="40" y="78" font-family="Playfair Display, Georgia, serif" font-size="22" fill="#2C1810">The wanderer who listens.</text>
+  <text x="40" y="100" font-family="Playfair Display, Georgia, serif" font-size="14" font-style="italic" fill="#2C1810" fill-opacity="0.7">A cartographer of feeling — drawn</text>
+  <text x="40" y="116" font-family="Playfair Display, Georgia, serif" font-size="14" font-style="italic" fill="#2C1810" fill-opacity="0.7">to edges, shorelines, low light.</text>
+
+  <!-- Divider -->
+  <line x1="24" y1="142" x2="456" y2="142" stroke="#2C1810" stroke-opacity="0.1"/>
+
+  <!-- Four-column grid: Taste / Movement / Encounter / Mark -->
+  <g font-family="IBM Plex Mono, monospace">
+    <!-- Taste -->
+    <text x="24" y="164" font-size="8" letter-spacing="2" fill="#2C1810" fill-opacity="0.4">TASTE</text>
+    <text x="24" y="184" font-size="10" fill="#2C1810" fill-opacity="0.85">dub reggae,</text>
+    <text x="24" y="198" font-size="10" fill="#2C1810" fill-opacity="0.85">ambient, soul</text>
+    <g>
+      <rect x="24" y="210" width="44" height="18" fill="#D4A843" fill-opacity="0.18"/>
+      <text x="46" y="222" font-size="8" fill="#2C1810" text-anchor="middle">warm</text>
+      <rect x="72" y="210" width="40" height="18" fill="#D4A843" fill-opacity="0.18"/>
+      <text x="92" y="222" font-size="8" fill="#2C1810" text-anchor="middle">slow</text>
+    </g>
+
+    <!-- Movement -->
+    <text x="132" y="164" font-size="8" letter-spacing="2" fill="#2C1810" fill-opacity="0.4">MOVEMENT</text>
+    <text x="132" y="184" font-size="10" fill="#2C1810" fill-opacity="0.85">coastal, mobile,</text>
+    <text x="132" y="198" font-size="10" fill="#2C1810" fill-opacity="0.85">returns often</text>
+    <g>
+      <rect x="132" y="210" width="48" height="18" fill="#7A8C6E" fill-opacity="0.22"/>
+      <text x="156" y="222" font-size="8" fill="#2C1810" text-anchor="middle">ocean</text>
+      <rect x="184" y="210" width="40" height="18" fill="#7A8C6E" fill-opacity="0.22"/>
+      <text x="204" y="222" font-size="8" fill="#2C1810" text-anchor="middle">dusk</text>
+    </g>
+
+    <!-- Encounter -->
+    <text x="244" y="164" font-size="8" letter-spacing="2" fill="#2C1810" fill-opacity="0.4">ENCOUNTER</text>
+    <text x="244" y="184" font-size="10" fill="#2C1810" fill-opacity="0.85">asks why, not</text>
+    <text x="244" y="198" font-size="10" fill="#2C1810" fill-opacity="0.85">what — patient</text>
+    <g>
+      <rect x="244" y="210" width="52" height="18" fill="#C17F5A" fill-opacity="0.2"/>
+      <text x="270" y="222" font-size="8" fill="#2C1810" text-anchor="middle">meaning</text>
+      <rect x="300" y="210" width="44" height="18" fill="#C17F5A" fill-opacity="0.2"/>
+      <text x="322" y="222" font-size="8" fill="#2C1810" text-anchor="middle">ritual</text>
+    </g>
+
+    <!-- Mark -->
+    <text x="360" y="164" font-size="8" letter-spacing="2" fill="#2C1810" fill-opacity="0.4">MARK</text>
+    <text x="360" y="184" font-size="10" fill="#2C1810" fill-opacity="0.85">sensory,</text>
+    <text x="360" y="198" font-size="10" fill="#2C1810" fill-opacity="0.85">fragmentary</text>
+    <g>
+      <rect x="360" y="210" width="40" height="18" fill="#2C1810" fill-opacity="0.08"/>
+      <text x="380" y="222" font-size="8" fill="#2C1810" text-anchor="middle">light</text>
+      <rect x="404" y="210" width="44" height="18" fill="#2C1810" fill-opacity="0.08"/>
+      <text x="426" y="222" font-size="8" fill="#2C1810" text-anchor="middle">water</text>
+    </g>
+  </g>
+
+  <!-- Stats row -->
+  <line x1="24" y1="252" x2="456" y2="252" stroke="#2C1810" stroke-opacity="0.1"/>
+  <g font-family="Playfair Display, Georgia, serif">
+    <text x="24" y="282" font-size="24" fill="#2C1810">47</text>
+    <text x="132" y="282" font-size="24" fill="#2C1810">19</text>
+    <text x="244" y="282" font-size="24" fill="#2C1810">12</text>
+    <text x="360" y="282" font-size="24" fill="#2C1810">88</text>
+  </g>
+  <g font-family="IBM Plex Mono, monospace" font-size="8" letter-spacing="2" fill="#2C1810" fill-opacity="0.4">
+    <text x="24" y="298">PAIRINGS</text>
+    <text x="132" y="298">EXPERIENCES</text>
+    <text x="244" y="298">ENCOUNTERS</text>
+    <text x="360" y="298">MARKS</text>
+  </g>
+</svg>
