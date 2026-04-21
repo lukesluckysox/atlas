@@ -10,7 +10,12 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!session.user.isPro) {
+  // Re-read isPro from DB so a stale JWT doesn't lock out paying users.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { isPro: true },
+  });
+  if (!dbUser?.isPro) {
     return NextResponse.json({ error: "Pro required" }, { status: 403 });
   }
 

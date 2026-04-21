@@ -23,7 +23,11 @@ async function main() {
     // and doesn't error if the user already exists.
     const user = await prisma.user.upsert({
       where: { username },
-      update: { passwordHash },
+      update: {
+        passwordHash,
+        // Always re-assert isPro so an earlier-seeded user gets upgraded.
+        isPro: true,
+      },
       create: {
         email,
         username,
