@@ -147,17 +147,28 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-earth/40 flex items-end md:items-center justify-center p-4">
-          <div className="bg-parchment w-full max-w-md p-8 relative">
-            <button
-              onClick={() => setShowForm(false)}
-              className="absolute top-4 right-4 text-earth/40 hover:text-earth"
-            >
-              <X size={16} />
-            </button>
-            <h2 className="font-serif text-2xl text-earth mb-8">Log experience</h2>
+        <>
+          {/* Dim only the left side; keep map fully visible on the right */}
+          <div
+            className="fixed inset-0 z-40 bg-earth/20 md:bg-transparent"
+            onClick={() => setShowForm(false)}
+          />
+          {/* Left-docked drawer */}
+          <div
+            className="fixed top-0 left-0 h-full w-full md:w-[420px] bg-parchment border-r border-earth/10 shadow-2xl z-50 overflow-y-auto animate-slide-in-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-8 relative">
+              <button
+                onClick={() => setShowForm(false)}
+                className="absolute top-4 right-4 text-earth/40 hover:text-earth"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+              <h2 className="font-serif text-2xl text-earth mb-8">Log experience</h2>
 
-            <div className="space-y-6">
+              <div className="space-y-6">
               <div>
                 <p className="label mb-3">Type</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -212,16 +223,17 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                 </p>
               )}
 
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-primary w-full disabled:opacity-40"
-              >
-                {saving ? "Saving..." : "Log it"}
-              </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="btn-primary w-full disabled:opacity-40"
+                >
+                  {saving ? "Saving..." : "Log it"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
