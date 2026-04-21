@@ -25,6 +25,7 @@ interface TrackLeaf {
 interface ArtistBranch {
   name: string;
   count: number;
+  genres?: string[];
   tracks: TrackLeaf[];
 }
 
@@ -32,6 +33,7 @@ interface SpotifyTopArtist {
   id: string;
   name: string;
   images: Array<{ url: string }>;
+  genres: string[];
 }
 interface SpotifyTopTracks {
   items: Array<{
@@ -76,17 +78,28 @@ export async function GET() {
 
 async function buildFromSpotify(userId: string) {
   const [topArtistsResp, topTracksResp, recentResp] = await Promise.all([
-    spotifyApi<{ items: SpotifyTopArtist[] }>(userId, "/me/top/artists?limit=20&time_range=medium_term"),
-    spotifyApi<SpotifyTopTracks>(userId, "/me/top/tracks?limit=50&time_range=medium_term"),
+    spotifyApi<{ items: SpotifyTopArtist[] }>(userId, "/me/top/artists?limit=20&time_range=short_term"),
+    spotifyApi<SpotifyTopTracks>(userId, "/me/top/tracks?limit=50&time_range=short_term"),
     spotifyApi<SpotifyRecent>(userId, "/me/player/recently-played?limit=50"),
   ]);
 
-  const artistScore = new Map<string, { name: string; score: number; image: string | null }>();
+  const artistScore = new Map<
+    string,
+    { name: string; score: number; image: string | null; genres: string[] }
+  >();
 
   // Top artists: weight 3, rank-scaled
   (topArtistsResp?.items ?? []).forEach((a, i) => {
-    const prev = artistScore.get(a.id) ?? { name: a.name, score: 0, image: a.images[0]?.url ?? null };
+    const prev = artistScore.get(a.id) ?? {
+      name: a.name,
+      score: 0,
+      image: a.images[0]?.url ?? null,
+      genres: a.genres ?? [],
+    };
     prev.score += 3 * Math.max(1, 20 - i);
+    if ((!prev.genres || prev.genres.length === 0) && a.genres?.length) {
+      prev.genres = a.genres;
+    }
     artistScore.set(a.id, prev);
   });
 
@@ -98,6 +111,7 @@ async function buildFromSpotify(userId: string) {
       name: artist.name,
       score: 0,
       image: item.track.album.images[0]?.url ?? null,
+      genres: [],
     };
     prev.score += 1;
     artistScore.set(artist.id, prev);
@@ -135,10 +149,11 @@ async function buildFromSpotify(userId: string) {
     });
   });
 
-  const ranked = Array.from(artistScore.entries())
+  const ranked: ArtistBranch[] = Array.from(artistScore.entries())
     .map(([id, meta]) => ({
       name: meta.name,
       count: Math.round(meta.score),
+      genres: meta.genres,
       tracks: (tracksByArtist.get(id) ?? []).slice(0, MAX_TRACKS_PER_ARTIST),
     }))
     .sort((a, b) => b.count - a.count);
@@ -150,6 +165,7 @@ async function buildFromSpotify(userId: string) {
     top.push({
       name: `${rest.length} more`,
       count: rest.reduce((sum, a) => sum + a.count, 0),
+      genres: [],
       tracks: rest
         .flatMap((a) => a.tracks)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -157,12 +173,37 @@ async function buildFromSpotify(userId: string) {
     });
   }
 
+  // Compute similarity links by shared genres
+  const links = computeSimilarityLinks(top);
+
   return {
     source: "spotify",
+    timeRange: "short_term",
     totalPairings: topTracksResp?.items.length ?? 0,
     totalArtists: ranked.length,
     branches: top,
+    links,
   };
+}
+
+/** Returns pairs of branch names that share >=1 genre, with shared genres. */
+function computeSimilarityLinks(
+  branches: ArtistBranch[]
+): Array<{ a: string; b: string; shared: string[] }> {
+  const out: Array<{ a: string; b: string; shared: string[] }> = [];
+  for (let i = 0; i < branches.length; i++) {
+    const A = branches[i];
+    if (!A.genres || A.genres.length === 0) continue;
+    for (let j = i + 1; j < branches.length; j++) {
+      const B = branches[j];
+      if (!B.genres || B.genres.length === 0) continue;
+      const shared = A.genres.filter((g) => B.genres!.includes(g));
+      if (shared.length > 0) {
+        out.push({ a: A.name, b: B.name, shared });
+      }
+    }
+  }
+  return out;
 }
 
 async function buildFromPairings(userId: string) {
@@ -220,5 +261,6 @@ async function buildFromPairings(userId: string) {
     totalPairings: pairings.length,
     totalArtists: byArtist.size,
     branches: top,
+    links: [],
   };
 }
