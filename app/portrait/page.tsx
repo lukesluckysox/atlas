@@ -9,9 +9,8 @@ export default async function PortraitPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
-  if (!session.user.isPro) {
-    redirect("/settings");
-  }
+  // Portrait is accessible to everyone — Pro gating (if any) happens inside
+  // /api/portrait/generate, not at page load.
 
   const portrait = await prisma.portrait.findUnique({
     where: { userId: session.user.id },
