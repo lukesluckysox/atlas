@@ -40,11 +40,34 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id, landed } = await req.json();
+  const body = await req.json();
+  const { id, landed, answer } = body as {
+    id: string;
+    landed?: boolean | null;
+    answer?: string | null;
+  };
+
+  // Verify ownership (Prisma requires the where clause to match uniquely)
+  const existing = await prisma.encounter.findFirst({
+    where: { id, userId: session.user.id },
+    select: { id: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Build update payload only from provided fields so callers can
+  // update either landed, answer, or both.
+  const data: { landed?: boolean | null; answer?: string | null } = {};
+  if (landed !== undefined) data.landed = landed;
+  if (answer !== undefined) {
+    const trimmed = typeof answer === "string" ? answer.trim() : "";
+    data.answer = trimmed.length > 0 ? trimmed : null;
+  }
 
   const encounter = await prisma.encounter.update({
-    where: { id, userId: session.user.id },
-    data: { landed },
+    where: { id },
+    data,
   });
 
   return NextResponse.json(encounter);

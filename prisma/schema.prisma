@@ -94,6 +94,7 @@ model Encounter {
   id       String   @id @default(cuid())
   userId   String
   question String
+  answer   String?  @db.Text
   landed   Boolean?
   date     DateTime @default(now())
   user     User     @relation(fields: [userId], references: [id])
