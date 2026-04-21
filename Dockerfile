@@ -2,7 +2,7 @@ FROM node:20-alpine
 RUN apk add --no-cache openssl
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 COPY prisma ./prisma
 RUN DATABASE_URL="postgresql://placeholder:5432/atlas" npx prisma generate
 COPY . .
