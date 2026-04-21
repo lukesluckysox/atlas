@@ -51,7 +51,13 @@ interface Experience {
   location?: string | null;
 }
 
-export default function MapView({ experiences }: { experiences: Experience[] }) {
+export default function MapView({
+  experiences,
+  onDelete,
+}: {
+  experiences: Experience[];
+  onDelete?: (id: string) => void;
+}) {
   const validExps = experiences.filter((e) => e.latitude && e.longitude);
   const center: [number, number] = validExps.length > 0
     ? [validExps[0].latitude!, validExps[0].longitude!]
@@ -92,6 +98,25 @@ export default function MapView({ experiences }: { experiences: Experience[] }) 
               </div>
               <div><strong>{exp.name}</strong></div>
               {exp.location && <div style={{ color: "#888", marginTop: "4px" }}>{exp.location}</div>}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(exp.id)}
+                  style={{
+                    marginTop: "8px",
+                    fontFamily: "IBM Plex Mono, monospace",
+                    fontSize: "10px",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "#C17F5A",
+                    background: "transparent",
+                    border: "1px solid #C17F5A",
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </Popup>
         </Marker>

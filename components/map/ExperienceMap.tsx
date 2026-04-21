@@ -18,6 +18,7 @@ import {
   Waves,
   Triangle,
   Landmark as LandmarkIcon,
+  Trash2,
 } from "lucide-react";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
@@ -207,6 +208,27 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (exp: Experience) => {
+    if (!confirm(`Delete "${exp.name}"? This can't be undone.`)) return;
+    setDeletingId(exp.id);
+    try {
+      const res = await fetch(`/api/experiences/${exp.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data: { error?: string } = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Could not delete.");
+      }
+      toast.success("Removed.");
+      router.refresh();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not delete.";
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const geoExperiences = experiences.filter((e) => e.latitude && e.longitude);
 
   return (
@@ -247,7 +269,13 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
         {/* Left: square map */}
         <div className="order-1">
           <div className="aspect-square border border-earth/10 overflow-hidden">
-            <MapView experiences={geoExperiences} />
+            <MapView
+              experiences={geoExperiences}
+              onDelete={(id) => {
+                const exp = experiences.find((e) => e.id === id);
+                if (exp) void handleDelete(exp);
+              }}
+            />
           </div>
 
           {/* Color legend */}
@@ -309,7 +337,7 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                     return (
                       <div
                         key={exp.id}
-                        className="flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0"
+                        className="group flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0"
                       >
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
@@ -329,6 +357,15 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                             {format(new Date(exp.date), "MMM yyyy")}
                           </p>
                         )}
+                        <button
+                          onClick={() => handleDelete(exp)}
+                          disabled={deletingId === exp.id}
+                          className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity disabled:opacity-30"
+                          aria-label="Delete entry"
+                          title="Delete"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     );
                   })
@@ -348,7 +385,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
               const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
               const TypeIcon = typeMeta?.icon ?? MapPin;
               return (
-                <div key={exp.id} className="flex items-center gap-6 py-4 border-b border-earth/5">
+                <div
+                  key={exp.id}
+                  className="group flex items-center gap-6 py-4 border-b border-earth/5"
+                >
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: typeMeta?.color || "#D4A843" }}
@@ -368,6 +408,15 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                       </p>
                     )}
                   </div>
+                  <button
+                    onClick={() => handleDelete(exp)}
+                    disabled={deletingId === exp.id}
+                    className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity disabled:opacity-30"
+                    aria-label="Delete entry"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               );
             })}
