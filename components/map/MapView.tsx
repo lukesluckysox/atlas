@@ -11,6 +11,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   concert: "#8B5A9F",         // violet
   trail: "#4A7A5C",          // forest green
   moment: "#E8C47A",          // amber-light
+  restaurant: "#A63D40",     // deep red
+  stadium: "#3A5A7A",        // steel blue
+  beach: "#3E7A8C",          // teal
+  peak: "#6B6B6B",           // granite gray
+  landmark: "#8B6F3F",       // bronze
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -20,6 +25,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   concert: "Concert",
   trail: "Trail",
   moment: "Moment",
+  restaurant: "Restaurant",
+  stadium: "Stadium",
+  beach: "Beach",
+  peak: "Peak",
+  landmark: "Landmark",
 };
 
 function iconForType(type: string) {

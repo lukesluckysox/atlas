@@ -4,7 +4,21 @@ import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Plus, MapPin, Mountain, Music2, Tent, Globe, X, Search } from "lucide-react";
+import {
+  Plus,
+  MapPin,
+  Mountain,
+  Music2,
+  Tent,
+  Globe,
+  X,
+  Search,
+  UtensilsCrossed,
+  Trophy,
+  Waves,
+  Triangle,
+  Landmark as LandmarkIcon,
+} from "lucide-react";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -14,6 +28,11 @@ const EXPERIENCE_TYPES = [
   { value: "state", label: "State / Region", icon: MapPin, color: "#C17F5A" },
   { value: "concert", label: "Concert", icon: Music2, color: "#8B5A9F" },
   { value: "trail", label: "Trail / Hike", icon: Tent, color: "#4A7A5C" },
+  { value: "restaurant", label: "Restaurant", icon: UtensilsCrossed, color: "#A63D40" },
+  { value: "stadium", label: "Stadium", icon: Trophy, color: "#3A5A7A" },
+  { value: "beach", label: "Beach", icon: Waves, color: "#3E7A8C" },
+  { value: "peak", label: "Peak", icon: Triangle, color: "#6B6B6B" },
+  { value: "landmark", label: "Landmark", icon: LandmarkIcon, color: "#8B6F3F" },
   { value: "moment", label: "Moment", icon: MapPin, color: "#E8C47A" },
 ];
 

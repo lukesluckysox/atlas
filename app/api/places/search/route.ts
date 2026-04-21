@@ -18,7 +18,12 @@ type ExperienceType =
   | "state"
   | "concert"
   | "trail"
-  | "moment";
+  | "moment"
+  | "restaurant"
+  | "stadium"
+  | "beach"
+  | "peak"
+  | "landmark";
 
 interface NominatimResult {
   place_id: number;
@@ -49,11 +54,19 @@ function buildQuery(rawQ: string, type: ExperienceType | null): string {
   switch (type) {
     case "national_park":
       return q.toLowerCase().includes("national park") ? q : `${q} national park`;
+    case "stadium":
+      return /stadium|arena|field|park|coliseum/i.test(q) ? q : `${q} stadium`;
+    case "peak":
+      return /mount|mt |peak|summit/i.test(q) ? q : `Mount ${q}`;
+    case "beach":
+      return /beach|coast|shore/i.test(q) ? q : `${q} beach`;
     case "country":
     case "state":
     case "trail":
     case "concert":
     case "moment":
+    case "restaurant":
+    case "landmark":
     default:
       return q;
   }
