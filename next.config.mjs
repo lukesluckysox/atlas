@@ -8,7 +8,9 @@ const nextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
-  serverExternalPackages: ['@prisma/client', 'pg'],
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'pg'],
+  },
 };
 
 export default nextConfig;
