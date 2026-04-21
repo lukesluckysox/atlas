@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -62,11 +62,15 @@ export function PairStudio({ isPro }: PairStudioProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  const handleSearch = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
     setSearching(true);
     try {
-      const res = await fetch(`/api/pair/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`/api/pair/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       setSearchResults(data.tracks ?? []);
     } catch {
@@ -74,7 +78,19 @@ export function PairStudio({ isPro }: PairStudioProps) {
     } finally {
       setSearching(false);
     }
-  };
+  }, []);
+
+  // Debounced auto-search: fires 300ms after user stops typing.
+  useEffect(() => {
+    if (mode !== "search") return;
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(() => handleSearch(q), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, mode, handleSearch]);
 
   const handleRecommend = async () => {
     if (!uploadedPhotoUrl) {
@@ -230,22 +246,42 @@ export function PairStudio({ isPro }: PairStudioProps) {
           </div>
 
           {mode === "search" && (
-            <div className="flex gap-2 mb-6">
-              <input
-                type="text"
-                placeholder="Search tracks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="input-field flex-1"
-              />
-              <button
-                onClick={handleSearch}
-                disabled={searching}
-                className="btn-secondary text-xs px-4"
-              >
-                {searching ? "..." : "Go"}
-              </button>
+            <div className="mb-6">
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 text-earth/30 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Search Spotify — song title, artist, or both"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
+                  className="input-field pl-6 pr-16"
+                  autoFocus
+                />
+                {searching && (
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 font-mono text-[10px] text-earth/40 tracking-widest uppercase">
+                    Searching
+                  </span>
+                )}
+                {!searching && searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSearchResults([]);
+                    }}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 text-earth/40 hover:text-earth"
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <p className="font-mono text-[10px] text-earth/30 mt-2 tracking-wide">
+                Results update as you type — pulled from the full Spotify catalog.
+              </p>
             </div>
           )}
 
