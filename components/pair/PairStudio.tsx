@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
+import { NowPlaying } from "@/components/spotify/NowPlaying";
 
 interface Track {
   id: string;
@@ -149,12 +150,16 @@ export function PairStudio({ isPro }: PairStudioProps) {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-12">
+      <div className="mb-8">
         <p className="label mb-2">Tracks</p>
         <h1 className="font-serif text-4xl text-earth">New pairing</h1>
         <p className="font-mono text-xs text-earth/40 mt-2">
           A photo. A track. Pure instinct.
         </p>
+      </div>
+
+      <div className="mb-12">
+        <NowPlaying />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
