@@ -31,6 +31,7 @@ const config: Config = {
         "slide-up": "slideUp 0.5s ease-out",
         "page-in": "pageIn 0.4s ease-out",
         "slide-in-left": "slideInLeft 0.35s ease-out",
+        "slide-in-right": "slideInRight 0.35s ease-out",
       },
       keyframes: {
         fadeIn: {
@@ -47,6 +48,10 @@ const config: Config = {
         },
         slideInLeft: {
           "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        slideInRight: {
+          "0%": { transform: "translateX(100%)" },
           "100%": { transform: "translateX(0)" },
         },
       },

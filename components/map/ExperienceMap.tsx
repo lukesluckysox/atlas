@@ -1,10 +1,10 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Plus, MapPin, Mountain, Music2, Tent, Globe, X } from "lucide-react";
+import { Plus, MapPin, Mountain, Music2, Tent, Globe, X, Search } from "lucide-react";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -28,6 +28,15 @@ interface Experience {
   note?: string | null;
 }
 
+interface PlaceResult {
+  id: string;
+  name: string;
+  location: string;
+  latitude: number;
+  longitude: number;
+  kind: string;
+}
+
 interface Props {
   experiences: Experience[];
   stats: { total: number; countries: number; nationalParks: number; concerts: number };
@@ -44,7 +53,64 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     location: "",
     date: "",
     note: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
+
+  const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const suggestionsLocked = useRef(false);
+
+  // Debounced place autocomplete
+  useEffect(() => {
+    if (suggestionsLocked.current) {
+      suggestionsLocked.current = false;
+      return;
+    }
+    const q = form.name.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    // Only autocomplete for geographic types
+    const geoTypes = ["country", "national_park", "state", "trail", "moment"];
+    if (!geoTypes.includes(form.type)) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/places/search?q=${encodeURIComponent(q)}&type=${form.type}`
+        );
+        const data: { results?: PlaceResult[] } = await res.json();
+        setSuggestions(data.results ?? []);
+        setShowSuggestions(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [form.name, form.type]);
+
+  const selectSuggestion = (s: PlaceResult) => {
+    suggestionsLocked.current = true;
+    setForm({
+      ...form,
+      name: s.name,
+      location: s.location,
+      latitude: s.latitude,
+      longitude: s.longitude,
+    });
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -60,6 +126,8 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
           type: form.type,
           name: form.name,
           location: form.location || undefined,
+          latitude: form.latitude ?? undefined,
+          longitude: form.longitude ?? undefined,
           date: form.date || undefined,
           note: form.note || undefined,
         }),
@@ -68,7 +136,15 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       if (!res.ok) throw new Error(data.error);
       toast.success("Noted.");
       setShowForm(false);
-      setForm({ type: "country", name: "", location: "", date: "", note: "" });
+      setForm({
+        type: "country",
+        name: "",
+        location: "",
+        date: "",
+        note: "",
+        latitude: null,
+        longitude: null,
+      });
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not save.";
@@ -148,14 +224,14 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
 
       {showForm && (
         <>
-          {/* Dim only the left side; keep map fully visible on the right */}
+          {/* Dim only the right side; keep map fully visible on the left */}
           <div
             className="fixed inset-0 z-40 bg-earth/20 md:bg-transparent"
             onClick={() => setShowForm(false)}
           />
-          {/* Left-docked drawer */}
+          {/* Right-docked drawer */}
           <div
-            className="fixed top-0 left-0 h-full w-full md:w-[420px] bg-parchment border-r border-earth/10 shadow-2xl z-50 overflow-y-auto animate-slide-in-left"
+            className="fixed top-0 right-0 h-full w-full md:w-[420px] bg-parchment border-l border-earth/10 shadow-2xl z-50 overflow-y-auto animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-8 relative">
@@ -175,7 +251,14 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                   {EXPERIENCE_TYPES.map((type) => (
                     <button
                       key={type.value}
-                      onClick={() => setForm({ ...form, type: type.value })}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          type: type.value,
+                          latitude: null,
+                          longitude: null,
+                        })
+                      }
                       className={`flex items-center gap-2 p-3 border text-left font-mono text-xs transition-colors ${
                         form.type === type.value
                           ? "border-amber bg-amber/10 text-earth"
@@ -189,13 +272,59 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                 </div>
               </div>
 
-              <input
-                type="text"
-                placeholder="Name *"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="input-field"
-              />
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Name * (start typing to search)"
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        name: e.target.value,
+                        latitude: null,
+                        longitude: null,
+                      })
+                    }
+                    onFocus={() => {
+                      if (suggestions.length > 0) setShowSuggestions(true);
+                    }}
+                    onBlur={() => {
+                      // Delay so click on suggestion registers first
+                      setTimeout(() => setShowSuggestions(false), 150);
+                    }}
+                    className="input-field pr-8"
+                    autoComplete="off"
+                  />
+                  {searching && (
+                    <Search
+                      size={14}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
+                    />
+                  )}
+                </div>
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-parchment border border-earth/20 shadow-lg max-h-64 overflow-y-auto">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectSuggestion(s);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-amber/10 border-b border-earth/5 last:border-b-0"
+                      >
+                        <p className="font-mono text-sm text-earth">{s.name}</p>
+                        {s.location && (
+                          <p className="font-mono text-xs text-earth/50">{s.location}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <input
                 type="text"
                 placeholder="Location (optional)"
