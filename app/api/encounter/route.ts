@@ -4,19 +4,34 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateDailyQuestion } from "@/lib/anthropic";
 
+/**
+ * Returns the current 12-hour encounter question for the user. Each global
+ * half-day window (UTC 00:00-11:59 and 12:00-23:59) gets its own question.
+ * If the user already has an encounter created inside the current window it's
+ * returned as-is; otherwise a fresh question is generated.
+ */
+
+function currentWindowStart(now: Date = new Date()): Date {
+  const d = new Date(now);
+  // Truncate to the nearest prior half-day boundary in UTC.
+  const hours = d.getUTCHours() < 12 ? 0 : 12;
+  d.setUTCHours(hours, 0, 0, 0);
+  return d;
+}
+
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const windowStart = currentWindowStart();
 
+  // Look for the user's encounter in the current 12-hour window.
   let encounter = await prisma.encounter.findFirst({
     where: {
       userId: session.user.id,
-      date: { gte: today },
+      date: { gte: windowStart },
     },
     orderBy: { date: "desc" },
   });

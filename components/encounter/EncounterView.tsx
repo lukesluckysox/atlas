@@ -94,7 +94,7 @@ export function EncounterView() {
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-24">
         <div className="max-w-xl w-full text-center animate-fade-in">
           <p className="label mb-12">
-            {format(new Date(), "EEEE, MMMM d")} — Today&rsquo;s question.
+            {format(new Date(), "EEEE, MMMM d")} — {new Date().getUTCHours() < 12 ? "Morning" : "Evening"} question.
             No answer required.
           </p>
 

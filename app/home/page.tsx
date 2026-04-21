@@ -5,6 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
 
+// Align with /api/encounter — two 12-hour windows a day, UTC-anchored.
+function currentWindowStart(): Date {
+  const d = new Date();
+  const hours = d.getUTCHours() < 12 ? 0 : 12;
+  d.setUTCHours(hours, 0, 0, 0);
+  return d;
+}
+
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
@@ -19,7 +27,7 @@ export default async function HomePage() {
     prisma.encounter.findFirst({
       where: {
         userId: session.user.id,
-        date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        date: { gte: currentWindowStart() },
       },
     }),
     prisma.mark.findMany({

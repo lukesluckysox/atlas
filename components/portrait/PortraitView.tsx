@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { RefreshCw, Compass } from "lucide-react";
 import { PhotoMosaic } from "./PhotoMosaic";
+import { MusicTree } from "./MusicTree";
 
 interface Portrait {
   id: string;
@@ -156,6 +157,11 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
           <div className="border-t border-earth/10 pt-8">
             <p className="label mb-4">Photomosaic</p>
             <PhotoMosaic />
+          </div>
+
+          <div className="border-t border-earth/10 pt-8">
+            <p className="label mb-4">Music tree</p>
+            <MusicTree />
           </div>
 
           <div className="border-t border-earth/10 pt-8">
