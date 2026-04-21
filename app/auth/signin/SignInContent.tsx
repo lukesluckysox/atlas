@@ -101,20 +101,6 @@ export default function SignInContent() {
           Atlas
         </Link>
 
-        {/* Hero: sample portrait the user will generate */}
-        <div className="mb-10">
-          <div className="relative w-full border border-earth/10 overflow-hidden bg-parchment">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/portrait-preview.svg"
-              alt="Sample Atlas portrait — the personality profile you'll generate"
-              className="w-full h-auto block"
-            />
-          </div>
-          <p className="font-mono text-[10px] tracking-widest text-earth/40 text-center mt-3 uppercase">
-            Your portrait — built from what you live
-          </p>
-        </div>
 
         {(urlError || formError) && (
           <div className="mb-6 p-3 border border-terracotta/40 bg-terracotta/10">
