@@ -3,12 +3,34 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const markerIcon = L.divIcon({
-  html: `<div style="width:10px;height:10px;background:#D4A843;border-radius:50%;border:2px solid #2C1810;"></div>`,
-  className: "",
-  iconSize: [10, 10],
-  iconAnchor: [5, 5],
-});
+// Category colors — kept in sync with ExperienceMap legend
+const CATEGORY_COLORS: Record<string, string> = {
+  country: "#D4A843",        // amber
+  national_park: "#7A8C6E",  // sage
+  state: "#C17F5A",          // terracotta
+  concert: "#8B5A9F",         // violet
+  trail: "#4A7A5C",          // forest green
+  moment: "#E8C47A",          // amber-light
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  country: "Country",
+  national_park: "National Park",
+  state: "State",
+  concert: "Concert",
+  trail: "Trail",
+  moment: "Moment",
+};
+
+function iconForType(type: string) {
+  const color = CATEGORY_COLORS[type] || "#D4A843";
+  return L.divIcon({
+    html: `<div style="width:12px;height:12px;background:${color};border-radius:50%;border:2px solid #2C1810;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+    className: "",
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+}
 
 interface Experience {
   id: string;
@@ -30,7 +52,7 @@ export default function MapView({ experiences }: { experiences: Experience[] }) 
       center={center}
       zoom={validExps.length > 0 ? 4 : 2}
       style={{ height: "100%", width: "100%", background: "#F5F0E8" }}
-      zoomControl={false}
+      zoomControl={true}
     >
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -40,11 +62,25 @@ export default function MapView({ experiences }: { experiences: Experience[] }) 
         <Marker
           key={exp.id}
           position={[exp.latitude!, exp.longitude!]}
-          icon={markerIcon}
+          icon={iconForType(exp.type)}
         >
           <Popup>
-            <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: "12px" }}>
-              <strong>{exp.name}</strong>
+            <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: "12px", minWidth: "160px" }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  fontSize: "9px",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  padding: "2px 6px",
+                  background: CATEGORY_COLORS[exp.type] || "#D4A843",
+                  color: "#2C1810",
+                  marginBottom: "6px",
+                }}
+              >
+                {CATEGORY_LABELS[exp.type] || exp.type}
+              </div>
+              <div><strong>{exp.name}</strong></div>
               {exp.location && <div style={{ color: "#888", marginTop: "4px" }}>{exp.location}</div>}
             </div>
           </Popup>
@@ -53,3 +89,6 @@ export default function MapView({ experiences }: { experiences: Experience[] }) 
     </MapContainer>
   );
 }
+
+// Re-export for use in the sidebar legend
+export { CATEGORY_COLORS, CATEGORY_LABELS };

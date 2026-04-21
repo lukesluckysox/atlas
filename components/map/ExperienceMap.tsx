@@ -9,12 +9,12 @@ import { Plus, MapPin, Mountain, Music2, Tent, Globe, X, Search } from "lucide-r
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
 const EXPERIENCE_TYPES = [
-  { value: "country", label: "Country", icon: Globe },
-  { value: "national_park", label: "National Park", icon: Mountain },
-  { value: "state", label: "State / Region", icon: MapPin },
-  { value: "concert", label: "Concert", icon: Music2 },
-  { value: "trail", label: "Trail / Hike", icon: Tent },
-  { value: "moment", label: "Moment", icon: MapPin },
+  { value: "country", label: "Country", icon: Globe, color: "#D4A843" },
+  { value: "national_park", label: "National Park", icon: Mountain, color: "#7A8C6E" },
+  { value: "state", label: "State / Region", icon: MapPin, color: "#C17F5A" },
+  { value: "concert", label: "Concert", icon: Music2, color: "#8B5A9F" },
+  { value: "trail", label: "Trail / Hike", icon: Tent, color: "#4A7A5C" },
+  { value: "moment", label: "Moment", icon: MapPin, color: "#E8C47A" },
 ];
 
 interface Experience {
@@ -43,49 +43,66 @@ interface Props {
   isPro: boolean;
 }
 
+interface FormState {
+  type: string;
+  name: string;
+  location: string;
+  date: string;
+  note: string;
+  latitude: number | null;
+  longitude: number | null;
+  // Concert-only sub-fields
+  artist: string;
+  venue: string;
+  city: string;
+}
+
+const INITIAL_FORM: FormState = {
+  type: "country",
+  name: "",
+  location: "",
+  date: "",
+  note: "",
+  latitude: null,
+  longitude: null,
+  artist: "",
+  venue: "",
+  city: "",
+};
+
 export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    type: "country",
-    name: "",
-    location: "",
-    date: "",
-    note: "",
-    latitude: null as number | null,
-    longitude: null as number | null,
-  });
+  const [form, setForm] = useState<FormState>(INITIAL_FORM);
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const suggestionsLocked = useRef(false);
+  // Active autocomplete target: 'name' for non-concert, 'city' for concert
+  const [activeField, setActiveField] = useState<"name" | "city">("name");
 
-  // Debounced place autocomplete
+  // Debounced place autocomplete — driven by either `name` or `city`
+  const query = form.type === "concert" ? form.city : form.name;
   useEffect(() => {
     if (suggestionsLocked.current) {
       suggestionsLocked.current = false;
       return;
     }
-    const q = form.name.trim();
+    const q = query.trim();
     if (q.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-    // Only autocomplete for geographic types
-    const geoTypes = ["country", "national_park", "state", "trail", "moment"];
-    if (!geoTypes.includes(form.type)) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    // Concerts search "city" type; others use their own type hint
+    const searchType = form.type === "concert" ? "state" : form.type;
     setSearching(true);
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/places/search?q=${encodeURIComponent(q)}&type=${form.type}`
+          `/api/places/search?q=${encodeURIComponent(q)}&type=${searchType}`
         );
         const data: { results?: PlaceResult[] } = await res.json();
         setSuggestions(data.results ?? []);
@@ -97,26 +114,51 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [form.name, form.type]);
+  }, [query, form.type]);
 
   const selectSuggestion = (s: PlaceResult) => {
     suggestionsLocked.current = true;
-    setForm({
-      ...form,
-      name: s.name,
-      location: s.location,
-      latitude: s.latitude,
-      longitude: s.longitude,
-    });
+    if (form.type === "concert") {
+      setForm((f) => ({
+        ...f,
+        city: s.name,
+        location: [f.venue, s.name, s.location].filter(Boolean).join(", "),
+        latitude: s.latitude,
+        longitude: s.longitude,
+      }));
+    } else {
+      setForm((f) => ({
+        ...f,
+        name: s.name,
+        location: s.location,
+        latitude: s.latitude,
+        longitude: s.longitude,
+      }));
+    }
     setShowSuggestions(false);
     setSuggestions([]);
   };
 
+  const resetForm = () => setForm(INITIAL_FORM);
+
   const handleSave = async () => {
-    if (!form.name.trim()) {
+    // Build the stored fields from concert sub-fields, or use name directly
+    let name = form.name.trim();
+    let location = form.location.trim();
+
+    if (form.type === "concert") {
+      if (!form.artist.trim()) {
+        toast.error("Artist / band is required.");
+        return;
+      }
+      name = form.artist.trim();
+      // Compose "Venue, City" for location display
+      location = [form.venue.trim(), form.city.trim()].filter(Boolean).join(", ");
+    } else if (!name) {
       toast.error("Name is required.");
       return;
     }
+
     setSaving(true);
     try {
       const res = await fetch("/api/experiences", {
@@ -124,8 +166,8 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: form.type,
-          name: form.name,
-          location: form.location || undefined,
+          name,
+          location: location || undefined,
           latitude: form.latitude ?? undefined,
           longitude: form.longitude ?? undefined,
           date: form.date || undefined,
@@ -136,15 +178,7 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       if (!res.ok) throw new Error(data.error);
       toast.success("Noted.");
       setShowForm(false);
-      setForm({
-        type: "country",
-        name: "",
-        location: "",
-        date: "",
-        note: "",
-        latitude: null,
-        longitude: null,
-      });
+      resetForm();
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not save.";
@@ -157,13 +191,19 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const geoExperiences = experiences.filter((e) => e.latitude && e.longitude);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12 animate-page-in">
+    <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
       <div className="flex items-end justify-between mb-8">
         <div>
           <p className="label mb-2">Experience</p>
           <h1 className="font-serif text-4xl text-earth">Life map</h1>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
+        <button
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
+          }}
+          className="btn-primary flex items-center gap-2"
+        >
           <Plus size={14} />
           Log
         </button>
@@ -183,187 +223,384 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
         ))}
       </div>
 
-      <div className="h-96 mb-12 border border-earth/10 overflow-hidden">
-        <MapView experiences={geoExperiences} />
-      </div>
-
-      <div className="space-y-px">
-        {experiences.map((exp) => {
-          const TypeIcon = EXPERIENCE_TYPES.find((t) => t.value === exp.type)?.icon ?? MapPin;
-          return (
-            <div key={exp.id} className="flex items-center gap-6 py-4 border-b border-earth/5">
-              <TypeIcon size={14} className="text-amber shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-mono text-sm text-earth">{exp.name}</p>
-                {exp.location && (
-                  <p className="font-mono text-xs text-earth/40">{exp.location}</p>
-                )}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="label text-xs">
-                  {EXPERIENCE_TYPES.find((t) => t.value === exp.type)?.label}
-                </p>
-                {exp.date && (
-                  <p className="font-mono text-xs text-earth/30 mt-1">
-                    {format(new Date(exp.date), "MMM yyyy")}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {experiences.length === 0 && (
-          <div className="py-16 text-center">
-            <p className="font-mono text-sm text-earth/40">
-              Nothing here yet. Go somewhere. Hear something.
-            </p>
+      {/* 2-col layout: square map on the left, form or list on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Left: square map */}
+        <div className="order-1">
+          <div className="aspect-square border border-earth/10 overflow-hidden">
+            <MapView experiences={geoExperiences} />
           </div>
-        )}
-      </div>
 
-      {showForm && (
-        <>
-          {/* Dim only the right side; keep map fully visible on the left */}
-          <div
-            className="fixed inset-0 z-40 bg-earth/20 md:bg-transparent"
-            onClick={() => setShowForm(false)}
-          />
-          {/* Right-docked drawer */}
-          <div
-            className="fixed top-0 right-0 h-full w-full md:w-[420px] bg-parchment border-l border-earth/10 shadow-2xl z-50 overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-8 relative">
-              <button
-                onClick={() => setShowForm(false)}
-                className="absolute top-4 right-4 text-earth/40 hover:text-earth"
-                aria-label="Close"
-              >
-                <X size={16} />
-              </button>
-              <h2 className="font-serif text-2xl text-earth mb-8">Log experience</h2>
-
-              <div className="space-y-6">
-              <div>
-                <p className="label mb-3">Type</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {EXPERIENCE_TYPES.map((type) => (
-                    <button
-                      key={type.value}
-                      onClick={() =>
-                        setForm({
-                          ...form,
-                          type: type.value,
-                          latitude: null,
-                          longitude: null,
-                        })
-                      }
-                      className={`flex items-center gap-2 p-3 border text-left font-mono text-xs transition-colors ${
-                        form.type === type.value
-                          ? "border-amber bg-amber/10 text-earth"
-                          : "border-earth/10 text-earth/60 hover:border-earth/30"
-                      }`}
-                    >
-                      <type.icon size={12} />
-                      {type.label}
-                    </button>
-                  ))}
-                </div>
+          {/* Color legend */}
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+            {EXPERIENCE_TYPES.map((t) => (
+              <div key={t.value} className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full border border-earth"
+                  style={{ backgroundColor: t.color }}
+                />
+                <span className="font-mono text-[10px] uppercase tracking-widest text-earth/60">
+                  {t.label}
+                </span>
               </div>
+            ))}
+          </div>
+        </div>
 
-              <div className="relative">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Name * (start typing to search)"
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        name: e.target.value,
-                        latitude: null,
-                        longitude: null,
-                      })
-                    }
-                    onFocus={() => {
-                      if (suggestions.length > 0) setShowSuggestions(true);
-                    }}
-                    onBlur={() => {
-                      // Delay so click on suggestion registers first
-                      setTimeout(() => setShowSuggestions(false), 150);
-                    }}
-                    className="input-field pr-8"
-                    autoComplete="off"
-                  />
-                  {searching && (
-                    <Search
-                      size={14}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
-                    />
-                  )}
-                </div>
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute z-10 left-0 right-0 mt-1 bg-parchment border border-earth/20 shadow-lg max-h-64 overflow-y-auto">
-                    {suggestions.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          selectSuggestion(s);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-amber/10 border-b border-earth/5 last:border-b-0"
-                      >
-                        <p className="font-mono text-sm text-earth">{s.name}</p>
-                        {s.location && (
-                          <p className="font-mono text-xs text-earth/50">{s.location}</p>
-                        )}
-                      </button>
-                    ))}
+        {/* Right: either the log form (when open) or the list */}
+        <div className="order-2 min-h-[480px]">
+          {showForm ? (
+            <LogPanel
+              form={form}
+              setForm={setForm}
+              saving={saving}
+              isPro={isPro}
+              suggestions={suggestions}
+              showSuggestions={showSuggestions}
+              setShowSuggestions={setShowSuggestions}
+              searching={searching}
+              activeField={activeField}
+              setActiveField={setActiveField}
+              selectSuggestion={selectSuggestion}
+              onClose={() => {
+                setShowForm(false);
+                resetForm();
+              }}
+              onSave={handleSave}
+            />
+          ) : (
+            <div className="border border-earth/10 h-full flex flex-col">
+              <div className="px-4 py-3 border-b border-earth/10 flex items-center justify-between">
+                <p className="label">Recent</p>
+                <p className="font-mono text-xs text-earth/30">
+                  {experiences.length} total
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {experiences.length === 0 ? (
+                  <div className="py-16 text-center px-6">
+                    <p className="font-mono text-sm text-earth/40">
+                      Nothing here yet. Go somewhere. Hear something.
+                    </p>
                   </div>
+                ) : (
+                  experiences.slice(0, 12).map((exp) => {
+                    const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
+                    const TypeIcon = typeMeta?.icon ?? MapPin;
+                    return (
+                      <div
+                        key={exp.id}
+                        className="flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: typeMeta?.color || "#D4A843" }}
+                        />
+                        <TypeIcon size={12} className="text-earth/40 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono text-sm text-earth truncate">{exp.name}</p>
+                          {exp.location && (
+                            <p className="font-mono text-xs text-earth/40 truncate">
+                              {exp.location}
+                            </p>
+                          )}
+                        </div>
+                        {exp.date && (
+                          <p className="font-mono text-xs text-earth/30 shrink-0">
+                            {format(new Date(exp.date), "MMM yyyy")}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
-
-              <input
-                type="text"
-                placeholder="Location (optional)"
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="input-field"
-              />
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="input-field"
-              />
-              <textarea
-                placeholder="Note (optional)"
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                rows={2}
-                className="input-field resize-none"
-              />
-
-              {!isPro && (
-                <p className="font-mono text-xs text-earth/40">
-                  Free tier: up to 50 experiences.
-                </p>
-              )}
-
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="btn-primary w-full disabled:opacity-40"
-                >
-                  {saving ? "Saving..." : "Log it"}
-                </button>
-              </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Full list below */}
+      {!showForm && experiences.length > 12 && (
+        <div className="mt-12">
+          <p className="label mb-4">All entries</p>
+          <div className="space-y-px">
+            {experiences.map((exp) => {
+              const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
+              const TypeIcon = typeMeta?.icon ?? MapPin;
+              return (
+                <div key={exp.id} className="flex items-center gap-6 py-4 border-b border-earth/5">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: typeMeta?.color || "#D4A843" }}
+                  />
+                  <TypeIcon size={14} className="text-earth/40 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-sm text-earth">{exp.name}</p>
+                    {exp.location && (
+                      <p className="font-mono text-xs text-earth/40">{exp.location}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="label text-xs">{typeMeta?.label}</p>
+                    {exp.date && (
+                      <p className="font-mono text-xs text-earth/30 mt-1">
+                        {format(new Date(exp.date), "MMM yyyy")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
+    </div>
+  );
+}
+
+// ----- Log panel (inline on the right side of the grid) -----
+
+interface LogPanelProps {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  saving: boolean;
+  isPro: boolean;
+  suggestions: PlaceResult[];
+  showSuggestions: boolean;
+  setShowSuggestions: (v: boolean) => void;
+  searching: boolean;
+  activeField: "name" | "city";
+  setActiveField: (f: "name" | "city") => void;
+  selectSuggestion: (s: PlaceResult) => void;
+  onClose: () => void;
+  onSave: () => void;
+}
+
+function LogPanel({
+  form,
+  setForm,
+  saving,
+  isPro,
+  suggestions,
+  showSuggestions,
+  setShowSuggestions,
+  searching,
+  selectSuggestion,
+  onClose,
+  onSave,
+}: LogPanelProps) {
+  const isConcert = form.type === "concert";
+
+  return (
+    <div className="border border-earth/10 bg-parchment h-full overflow-y-auto">
+      <div className="px-5 py-4 border-b border-earth/10 flex items-center justify-between">
+        <p className="label">Log experience</p>
+        <button
+          onClick={onClose}
+          className="text-earth/40 hover:text-earth"
+          aria-label="Close"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-5">
+        <div>
+          <p className="label mb-3">Type</p>
+          <div className="grid grid-cols-2 gap-2">
+            {EXPERIENCE_TYPES.map((type) => (
+              <button
+                key={type.value}
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    type: type.value,
+                    latitude: null,
+                    longitude: null,
+                  }))
+                }
+                className={`flex items-center gap-2 p-2.5 border text-left font-mono text-xs transition-colors ${
+                  form.type === type.value
+                    ? "border-amber bg-amber/10 text-earth"
+                    : "border-earth/10 text-earth/60 hover:border-earth/30"
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: type.color }}
+                />
+                <type.icon size={12} />
+                {type.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isConcert ? (
+          <>
+            <input
+              type="text"
+              placeholder="Artist / band *"
+              value={form.artist}
+              onChange={(e) => setForm((f) => ({ ...f, artist: e.target.value }))}
+              className="input-field"
+              autoComplete="off"
+            />
+            <input
+              type="text"
+              placeholder="Venue (e.g. Red Rocks Amphitheatre)"
+              value={form.venue}
+              onChange={(e) => setForm((f) => ({ ...f, venue: e.target.value }))}
+              className="input-field"
+              autoComplete="off"
+            />
+            <div className="relative">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="City (start typing to search)"
+                  value={form.city}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      city: e.target.value,
+                      latitude: null,
+                      longitude: null,
+                    }))
+                  }
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  className="input-field pr-8"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <Search
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
+                  />
+                )}
+              </div>
+              {showSuggestions && suggestions.length > 0 && (
+                <SuggestionsDropdown
+                  suggestions={suggestions}
+                  onPick={selectSuggestion}
+                />
+              )}
+            </div>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+              className="input-field"
+            />
+            <textarea
+              placeholder="Note (opening act, who you went with, how it felt)"
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              rows={2}
+              className="input-field resize-none"
+            />
+          </>
+        ) : (
+          <>
+            <div className="relative">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Name * (start typing to search)"
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      name: e.target.value,
+                      latitude: null,
+                      longitude: null,
+                    }))
+                  }
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  className="input-field pr-8"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <Search
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
+                  />
+                )}
+              </div>
+              {showSuggestions && suggestions.length > 0 && (
+                <SuggestionsDropdown
+                  suggestions={suggestions}
+                  onPick={selectSuggestion}
+                />
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder="Location (optional)"
+              value={form.location}
+              onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+              className="input-field"
+            />
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+              className="input-field"
+            />
+            <textarea
+              placeholder="Note (optional)"
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              rows={2}
+              className="input-field resize-none"
+            />
+          </>
+        )}
+
+        {!isPro && (
+          <p className="font-mono text-xs text-earth/40">
+            Free tier: up to 50 experiences.
+          </p>
+        )}
+
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="btn-primary w-full disabled:opacity-40"
+        >
+          {saving ? "Saving..." : "Log it"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SuggestionsDropdown({
+  suggestions,
+  onPick,
+}: {
+  suggestions: PlaceResult[];
+  onPick: (s: PlaceResult) => void;
+}) {
+  return (
+    <div className="absolute z-10 left-0 right-0 mt-1 bg-parchment border border-earth/20 shadow-lg max-h-64 overflow-y-auto">
+      {suggestions.map((s) => (
+        <button
+          key={s.id}
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onPick(s);
+          }}
+          className="w-full text-left px-3 py-2 hover:bg-amber/10 border-b border-earth/5 last:border-b-0"
+        >
+          <p className="font-mono text-sm text-earth">{s.name}</p>
+          {s.location && (
+            <p className="font-mono text-xs text-earth/50">{s.location}</p>
+          )}
+        </button>
+      ))}
     </div>
   );
 }
