@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Music2, ExternalLink, Link2, Link2Off } from "lucide-react";
+import { Music2, ExternalLink, Link2, Link2Off, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface NowPlayingData {
@@ -19,7 +19,18 @@ interface NowPlayingData {
   };
 }
 
-export function NowPlaying() {
+export interface NowPlayingTrack {
+  id: string;
+  name: string;
+  artist: string;
+  albumArt: string | null;
+}
+
+interface Props {
+  onUseTrack?: (track: NowPlayingTrack) => void;
+}
+
+export function NowPlaying({ onUseTrack }: Props = {}) {
   const [data, setData] = useState<NowPlayingData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -146,6 +157,21 @@ export function NowPlaying() {
         </div>
 
         <div className="flex flex-col items-end gap-2">
+          {onUseTrack && (
+            <button
+              onClick={() =>
+                onUseTrack({
+                  id: t.id,
+                  name: t.name,
+                  artist: t.artist,
+                  albumArt: t.albumArt,
+                })
+              }
+              className="btn-primary text-[10px] flex items-center gap-1.5 px-3 py-1.5"
+            >
+              <Plus size={10} /> Pair this
+            </button>
+          )}
           <a
             href={t.url}
             target="_blank"

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
-import { NowPlaying } from "@/components/spotify/NowPlaying";
+import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
 
 interface Track {
   id: string;
@@ -159,7 +159,20 @@ export function PairStudio({ isPro }: PairStudioProps) {
       </div>
 
       <div className="mb-12">
-        <NowPlaying />
+        <NowPlaying
+          onUseTrack={(t: NowPlayingTrack) => {
+            setSelectedTrack({
+              id: t.id,
+              name: t.name,
+              artist: t.artist,
+              albumArt: t.albumArt ?? undefined,
+            });
+            setMode("search");
+            setSearchResults([]);
+            setSearchQuery("");
+            toast.success(`Paired with ${t.name}`);
+          }}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
