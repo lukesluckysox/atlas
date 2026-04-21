@@ -1,27 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --parchment: #F5F0E8;
+  --earth: #2C1810;
+  --amber: #D4A843;
+  --sage: #7A8C6E;
+  --terracotta: #C17F5A;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--parchment);
+  color: var(--earth);
+  font-family: 'IBM Plex Mono', monospace;
+  min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.4;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
+  .font-serif {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .font-mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-earth text-parchment px-6 py-3 font-mono text-sm tracking-wide hover:bg-earth-light transition-colors duration-300;
+  }
+
+  .btn-secondary {
+    @apply border border-earth text-earth px-6 py-3 font-mono text-sm tracking-wide hover:bg-earth hover:text-parchment transition-colors duration-300;
+  }
+
+  .btn-amber {
+    @apply bg-amber text-earth px-6 py-3 font-mono text-sm tracking-wide hover:bg-amber-light transition-colors duration-300;
+  }
+
+  .card {
+    @apply bg-parchment border border-earth/10 p-6;
+  }
+
+  .label {
+    @apply font-mono text-xs text-earth/50 uppercase tracking-widest;
+  }
+
+  .input-field {
+    @apply w-full bg-transparent border-b border-earth/30 py-3 px-0 font-mono text-sm text-earth placeholder:text-earth/40 focus:outline-none focus:border-earth transition-colors;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4A843;
+  border-radius: 0;
+}
+
+/* Selection */
+::selection {
+  background: #D4A843;
+  color: #2C1810;
 }

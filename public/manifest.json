@@ -1,0 +1,42 @@
+{
+  "name": "Atlas",
+  "short_name": "Atlas",
+  "description": "A portrait of who you are. Not through introspection.",
+  "start_url": "/home",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F0E8",
+  "theme_color": "#D4A843",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "personal"],
+  "shortcuts": [
+    {
+      "name": "New Pairing",
+      "url": "/pair",
+      "description": "Create a new photo/track pairing"
+    },
+    {
+      "name": "Mark",
+      "url": "/mark",
+      "description": "Mark an observation"
+    },
+    {
+      "name": "Today's Question",
+      "url": "/encounter",
+      "description": "See today's question"
+    }
+  ]
+}
