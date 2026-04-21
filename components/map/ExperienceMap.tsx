@@ -90,11 +90,62 @@ const INITIAL_FORM: FormState = {
   city: "",
 };
 
+const FILTER_STORAGE_KEY = "trace:map-filter";
+
 export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+
+  // Active category layers. null = all enabled.
+  const [activeTypes, setActiveTypes] = useState<Set<string> | null>(null);
+
+  // Hydrate filter from localStorage once
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setActiveTypes(new Set(parsed));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistFilter = (next: Set<string> | null) => {
+    if (typeof window === "undefined") return;
+    if (next === null) localStorage.removeItem(FILTER_STORAGE_KEY);
+    else localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(Array.from(next)));
+  };
+
+  const toggleType = (value: string) => {
+    setActiveTypes((prev) => {
+      const base = prev ?? new Set(EXPERIENCE_TYPES.map((t) => t.value));
+      const next = new Set(base);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      // If user re-enabled everything, collapse back to null
+      const isAll = next.size === EXPERIENCE_TYPES.length;
+      const final = isAll ? null : next;
+      persistFilter(final);
+      return final;
+    });
+  };
+
+  const soloType = (value: string) => {
+    const next = new Set<string>([value]);
+    setActiveTypes(next);
+    persistFilter(next);
+  };
+
+  const resetFilter = () => {
+    setActiveTypes(null);
+    persistFilter(null);
+  };
+
+  const isTypeActive = (value: string) => activeTypes === null || activeTypes.has(value);
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -196,9 +247,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       });
       const data: { error?: string } = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast.success("Noted.");
-      setShowForm(false);
-      resetForm();
+      toast.success("Noted. Add another.");
+      // Keep drawer open and preserve the current type, but clear the rest
+      // so the user can rapid-fire multiple entries in the same category.
+      setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not save.";
@@ -229,7 +281,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     }
   };
 
-  const geoExperiences = experiences.filter((e) => e.latitude && e.longitude);
+  const geoExperiences = experiences.filter(
+    (e) => e.latitude && e.longitude && isTypeActive(e.type)
+  );
+  const visibleExperiences = experiences.filter((e) => isTypeActive(e.type));
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
@@ -278,19 +333,53 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
             />
           </div>
 
-          {/* Color legend */}
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
-            {EXPERIENCE_TYPES.map((t) => (
-              <div key={t.value} className="flex items-center gap-2">
-                <span
-                  className="w-2.5 h-2.5 rounded-full border border-earth"
-                  style={{ backgroundColor: t.color }}
-                />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-earth/60">
-                  {t.label}
-                </span>
-              </div>
-            ))}
+          {/* Layer filter chips — click to toggle, shift+click or long-press "Only" to solo */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="label">Layers</p>
+              {activeTypes !== null && (
+                <button
+                  onClick={resetFilter}
+                  className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {EXPERIENCE_TYPES.map((t) => {
+                const active = isTypeActive(t.value);
+                return (
+                  <div key={t.value} className="group relative">
+                    <button
+                      onClick={() => toggleType(t.value)}
+                      className={`flex items-center gap-1.5 px-2 py-1 border font-mono text-[10px] uppercase tracking-widest transition-all ${
+                        active
+                          ? "border-earth/30 text-earth/80 bg-parchment"
+                          : "border-earth/10 text-earth/25 line-through"
+                      }`}
+                      title={active ? "Click to hide" : "Click to show"}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full border ${
+                          active ? "border-earth" : "border-earth/20"
+                        }`}
+                        style={{ backgroundColor: active ? t.color : "transparent" }}
+                      />
+                      {t.label}
+                    </button>
+                    <button
+                      onClick={() => soloType(t.value)}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-earth text-parchment font-mono text-[8px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      title={`Show only ${t.label}`}
+                      aria-label={`Show only ${t.label}`}
+                    >
+                      1
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -320,18 +409,22 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
               <div className="px-4 py-3 border-b border-earth/10 flex items-center justify-between">
                 <p className="label">Recent</p>
                 <p className="font-mono text-xs text-earth/30">
-                  {experiences.length} total
+                  {activeTypes === null
+                    ? `${experiences.length} total`
+                    : `${visibleExperiences.length} of ${experiences.length}`}
                 </p>
               </div>
               <div className="flex-1 overflow-y-auto">
-                {experiences.length === 0 ? (
+                {visibleExperiences.length === 0 ? (
                   <div className="py-16 text-center px-6">
                     <p className="font-mono text-sm text-earth/40">
-                      Nothing here yet. Go somewhere. Hear something.
+                      {experiences.length === 0
+                        ? "Nothing here yet. Go somewhere. Hear something."
+                        : "No entries in the selected layers."}
                     </p>
                   </div>
                 ) : (
-                  experiences.slice(0, 12).map((exp) => {
+                  visibleExperiences.slice(0, 12).map((exp) => {
                     const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
                     const TypeIcon = typeMeta?.icon ?? MapPin;
                     return (
@@ -377,11 +470,11 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       </div>
 
       {/* Full list below */}
-      {!showForm && experiences.length > 12 && (
+      {!showForm && visibleExperiences.length > 12 && (
         <div className="mt-12">
           <p className="label mb-4">All entries</p>
           <div className="space-y-px">
-            {experiences.map((exp) => {
+            {visibleExperiences.map((exp) => {
               const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
               const TypeIcon = typeMeta?.icon ?? MapPin;
               return (
@@ -463,7 +556,12 @@ function LogPanel({
   return (
     <div className="border border-earth/10 bg-parchment h-full overflow-y-auto">
       <div className="px-5 py-4 border-b border-earth/10 flex items-center justify-between">
-        <p className="label">Log experience</p>
+        <div>
+          <p className="label">Log experience</p>
+          <p className="font-mono text-[10px] text-earth/40 mt-0.5">
+            Drawer stays open — log as many as you want.
+          </p>
+        </div>
         <button
           onClick={onClose}
           className="text-earth/40 hover:text-earth"
@@ -632,13 +730,21 @@ function LogPanel({
           </p>
         )}
 
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="btn-primary w-full disabled:opacity-40"
-        >
-          {saving ? "Saving..." : "Log it"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="btn-primary flex-1 disabled:opacity-40"
+          >
+            {saving ? "Saving..." : "Log & add another"}
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 border border-earth/20 text-earth/60 hover:text-earth hover:border-earth/40 font-mono text-xs uppercase tracking-widest"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
