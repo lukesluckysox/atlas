@@ -17,7 +17,21 @@ export default async function HomePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
-  const [recentPairings, experienceCount, encounterToday, recentMarks] = await Promise.all([
+  // Local day boundary (server runs UTC; client shows user's day). We
+  // approximate "today" with the UTC day window, which is close enough for
+  // the today-strip. The strip forgives minor drift.
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  const [
+    recentPairings,
+    experienceCount,
+    encounterToday,
+    recentMarks,
+    pairingsToday,
+    marksToday,
+    latestExperience,
+  ] = await Promise.all([
     prisma.pairing.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -35,16 +49,29 @@ export default async function HomePage() {
       orderBy: { createdAt: "desc" },
       take: 3,
     }),
+    prisma.pairing.count({
+      where: { userId: session.user.id, createdAt: { gte: startOfToday } },
+    }),
+    prisma.mark.count({
+      where: { userId: session.user.id, createdAt: { gte: startOfToday } },
+    }),
+    prisma.experience.findFirst({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: { name: true, location: true },
+    }),
   ]);
 
   return (
     <AppShell>
       <HomeDashboard
-        user={session.user}
         recentPairings={recentPairings}
         experienceCount={experienceCount}
         encounterToday={encounterToday}
         recentMarks={recentMarks}
+        pairingsToday={pairingsToday}
+        marksToday={marksToday}
+        latestExperience={latestExperience}
       />
     </AppShell>
   );

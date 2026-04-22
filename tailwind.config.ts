@@ -35,6 +35,7 @@ const config: Config = {
         "page-in": "pageIn 0.4s ease-out",
         "slide-in-left": "slideInLeft 0.35s ease-out",
         "slide-in-right": "slideInRight 0.35s ease-out",
+        bloom: "bloomIn 1.1s cubic-bezier(.2,.8,.2,1)",
       },
       keyframes: {
         fadeIn: {
@@ -56,6 +57,12 @@ const config: Config = {
         slideInRight: {
           "0%": { transform: "translateX(100%)" },
           "100%": { transform: "translateX(0)" },
+        },
+        bloomIn: {
+          "0%": { transform: "scale(.7)", opacity: "0" },
+          "20%": { opacity: "1" },
+          "70%": { transform: "scale(1)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "0" },
         },
       },
     },

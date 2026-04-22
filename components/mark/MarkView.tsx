@@ -39,14 +39,52 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   }, []);
 
   const getLocation = () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not available.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationLabel(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLocation({ lat, lng });
+        // Coords as immediate fallback; reverse-geocode if it succeeds.
+        setLocationLabel(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        try {
+          const res = await fetch(`/api/places/reverse?lat=${lat}&lng=${lng}`);
+          if (res.ok) {
+            const data: { label?: string | null } = await res.json();
+            if (data.label) setLocationLabel(data.label);
+          }
+        } catch {
+          /* keep coord fallback */
+        }
       },
       () => toast.error("Could not get location.")
     );
+  };
+
+  // Fetch now-playing from Spotify and append as "♪ Track — Artist".
+  const attachNowPlaying = async () => {
+    try {
+      const res = await fetch("/api/spotify/now-playing");
+      const data = await res.json();
+      if (!data.connected) {
+        toast.error("Connect Spotify in Settings first.");
+        return;
+      }
+      if (!data.playing || !data.track) {
+        toast("Nothing playing right now.");
+        return;
+      }
+      const snippet = `♪ ${data.track.name} — ${data.track.artist}`;
+      setContent((c) => {
+        const trimmed = c.replace(/\s*$/, "");
+        return trimmed ? `${trimmed}\n${snippet}` : snippet;
+      });
+    } catch {
+      toast.error("Could not fetch track.");
+    }
   };
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,6 +190,26 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
     }
   };
 
+  // Slash commands — detect in content and trigger the matching action.
+  // Runs on every change; strips the slash token when consumed.
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    // Match "/word" at end of value, preceded by start-or-whitespace.
+    const match = v.match(/(^|\s)\/(here|song|photo)(\s|$)/i);
+    if (match) {
+      const cmd = match[2].toLowerCase();
+      const stripped =
+        v.slice(0, match.index! + match[1].length) +
+        v.slice(match.index! + match[0].length);
+      setContent(stripped);
+      if (cmd === "here") getLocation();
+      else if (cmd === "song") attachNowPlaying();
+      else if (cmd === "photo") fileRef.current?.click();
+      return;
+    }
+    setContent(v);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       handleSave();
@@ -163,7 +221,8 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
       <div className="mb-12 flex items-start justify-between gap-4">
         <div>
           <p className="label mb-2">Notice</p>
-          <p className="font-mono text-xs text-earth/40">
+          <h1 className="font-serif text-4xl text-earth">Capture</h1>
+          <p className="font-mono text-xs text-earth/40 mt-2">
             What you noticed. One line, maybe a photo.
           </p>
         </div>
@@ -176,12 +235,17 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
         <textarea
           ref={textRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleContentChange}
           onKeyDown={handleKeyDown}
           placeholder="You noticed something."
           rows={3}
           className="w-full bg-transparent border-b border-earth/20 py-4 font-mono text-sm text-earth placeholder:text-earth/30 focus:outline-none focus:border-earth transition-colors resize-none"
         />
+        <p className="font-mono text-[10px] uppercase tracking-widest text-earth/30 mt-2">
+          Try <span className="text-earth/60">/here</span>{" "}
+          <span className="text-earth/60">/song</span>{" "}
+          <span className="text-earth/60">/photo</span>
+        </p>
 
         {photoUrl && (
           <div className="relative mt-4 inline-block">

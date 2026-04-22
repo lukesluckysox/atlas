@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
@@ -18,10 +19,25 @@ interface Track {
 
 interface PairStudioProps {
   isPro: boolean;
+  recentPairings: Array<{
+    id: string;
+    photoUrl: string;
+    albumArt?: string | null;
+    trackName: string;
+  }>;
 }
 
-export function PairStudio({ isPro }: PairStudioProps) {
+interface JustSaved {
+  photoUrl: string;
+  albumArt?: string | null;
+  trackName: string;
+  artistName: string;
+}
+
+export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
   const router = useRouter();
+  const [justSaved, setJustSaved] = useState<JustSaved | null>(null);
+  const [blooming, setBlooming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -149,18 +165,86 @@ export function PairStudio({ isPro }: PairStudioProps) {
       return res.json();
     });
     setSaving(false);
-    if (result) {
-      toast.success("Pairing saved.");
-      router.push("/explore");
-    } else {
+    if (!result) {
       toast.error("Could not save pairing.");
+      return;
     }
+    // Lands-in-archive sequence: bloom the pair, then park it on the ribbon
+    // and reset the form so you can log another one.
+    setJustSaved({
+      photoUrl: uploadedPhotoUrl,
+      albumArt: selectedTrack.albumArt,
+      trackName: selectedTrack.name,
+      artistName: selectedTrack.artist,
+    });
+    setBlooming(true);
+    window.setTimeout(() => setBlooming(false), 1100);
+    // Reset the form but keep the ribbon visible.
+    setPhotoUrl(null);
+    setUploadedPhotoUrl(null);
+    setPhotoMood(null);
+    setSelectedTrack(null);
+    setSearchQuery("");
+    setSearchResults([]);
+    setRecommendations([]);
+    setNote("");
+    setLocation("");
+    // Make sure server components (e.g. Home today-strip) pick up the new count.
+    router.refresh();
   };
 
   const displayTracks = mode === "recommend" ? recommendations : searchResults;
 
+  // Ribbon shows: just-saved (if any) + up to 2 prior from server.
+  const ribbonItems = [
+    ...(justSaved
+      ? [{
+          id: "just",
+          photoUrl: justSaved.photoUrl,
+          albumArt: justSaved.albumArt,
+          trackName: justSaved.trackName,
+          fresh: true,
+        }]
+      : []),
+    ...recentPairings.slice(0, justSaved ? 2 : 3).map((p) => ({
+      id: p.id,
+      photoUrl: p.photoUrl,
+      albumArt: p.albumArt,
+      trackName: p.trackName,
+      fresh: false,
+    })),
+  ];
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12 animate-page-in">
+    <div className="max-w-5xl mx-auto px-6 py-12 animate-page-in relative">
+      {/* Save bloom — photo + album art briefly center-stage */}
+      {blooming && justSaved && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-parchment/80 pointer-events-none">
+          <div className="flex items-center gap-px bg-earth/10 animate-bloom">
+            <div className="relative w-48 h-48 bg-earth/10">
+              <Image
+                src={justSaved.photoUrl}
+                alt="Just paired"
+                fill
+                className="object-cover"
+                sizes="192px"
+              />
+            </div>
+            {justSaved.albumArt && (
+              <div className="relative w-48 h-48 bg-earth/10">
+                <Image
+                  src={justSaved.albumArt}
+                  alt={justSaved.trackName}
+                  fill
+                  className="object-cover"
+                  sizes="192px"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <p className="label mb-2">Tracks</p>
@@ -173,6 +257,52 @@ export function PairStudio({ isPro }: PairStudioProps) {
           <SaveChip state={save.state} onRetry={save.retry} />
         </div>
       </div>
+
+      {/* Lands-in-archive ribbon — shows the new pairing riding on top of the archive */}
+      {ribbonItems.length > 0 && (
+        <div className="mb-10 animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <p className="label">
+              {justSaved ? "Landed in archive" : "Recent"}
+            </p>
+            <Link
+              href="/explore"
+              className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth transition-colors"
+            >
+              Archive →
+            </Link>
+          </div>
+          <div className="flex gap-px bg-earth/10">
+            {ribbonItems.map((p) => (
+              <div
+                key={p.id}
+                className={`relative w-20 h-20 bg-earth/5 overflow-hidden ${
+                  p.fresh ? "ring-2 ring-amber animate-fade-in" : ""
+                }`}
+              >
+                <Image
+                  src={p.photoUrl}
+                  alt={p.trackName}
+                  fill
+                  className="object-cover"
+                  sizes="80px"
+                />
+                {p.albumArt && (
+                  <div className="absolute bottom-1 right-1 w-6 h-6 border border-parchment/60">
+                    <Image
+                      src={p.albumArt}
+                      alt={p.trackName}
+                      fill
+                      className="object-cover"
+                      sizes="24px"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-12">
         <NowPlaying

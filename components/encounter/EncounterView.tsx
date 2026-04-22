@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
+import { format, differenceInCalendarDays } from "date-fns";
 import toast from "react-hot-toast";
 import { Pencil, Check } from "lucide-react";
 
@@ -79,6 +79,30 @@ export function EncounterView() {
     await patch(payload);
   };
 
+  // Past encounters by age bucket + calendar-day match
+  const { rail, onThisDay } = useMemo(() => {
+    const now = new Date();
+    const todayMD = `${now.getMonth()}-${now.getDate()}`;
+    const byAge: Record<string, Encounter | undefined> = {};
+    const sameDay: Encounter[] = [];
+    for (const enc of history) {
+      const d = new Date(enc.date);
+      const days = differenceInCalendarDays(now, d);
+      if (days >= 6 && days <= 8 && !byAge["7"]) byAge["7"] = enc;
+      if (days >= 28 && days <= 32 && !byAge["30"]) byAge["30"] = enc;
+      if (days >= 85 && days <= 95 && !byAge["90"]) byAge["90"] = enc;
+      if (days >= 350 && days <= 380 && !byAge["365"]) byAge["365"] = enc;
+      if (days >= 1 && `${d.getMonth()}-${d.getDate()}` === todayMD) sameDay.push(enc);
+    }
+    const railItems = [
+      { label: "7 days ago", enc: byAge["7"] },
+      { label: "30 days ago", enc: byAge["30"] },
+      { label: "90 days ago", enc: byAge["90"] },
+      { label: "A year ago", enc: byAge["365"] },
+    ].filter((r) => r.enc);
+    return { rail: railItems, onThisDay: sameDay };
+  }, [history]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -93,6 +117,8 @@ export function EncounterView() {
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-24">
         <div className="max-w-xl w-full text-center animate-fade-in">
+          <h1 className="font-serif text-4xl md:text-5xl text-earth mb-2">Encounter</h1>
+          <p className="font-mono text-xs text-earth/40 mb-12">One question. Every day. Yours to sit with.</p>
           <p className="label mb-12">
             {format(new Date(), "EEEE, MMMM d")} — {new Date().getUTCHours() < 12 ? "Morning" : "Evening"} question.
             No answer required.
@@ -204,6 +230,50 @@ export function EncounterView() {
           )}
         </div>
       </div>
+
+      {rail.length > 0 && (
+        <div className="border-t border-earth/10 px-8 py-10 max-w-3xl mx-auto w-full">
+          <p className="label mb-6">Where you were</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rail.map(({ label, enc }) => enc && (
+              <div key={label} className="border border-earth/10 p-5 bg-parchment">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-mono text-[11px] text-earth/40 uppercase tracking-wider">{label}</p>
+                  <p className="font-mono text-[10px] text-earth/30">{format(new Date(enc.date), "MMM d")}</p>
+                </div>
+                <p className="font-serif text-base text-earth/85 leading-snug mb-2">{enc.question}</p>
+                {enc.answer && (
+                  <p className="font-serif text-sm text-earth/60 italic leading-relaxed border-l border-amber/30 pl-3">
+                    {enc.answer}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {onThisDay.length > 0 && today && (
+        <div className="border-t border-earth/10 px-8 py-10 max-w-3xl mx-auto w-full">
+          <p className="label mb-6">On this day</p>
+          <div className="space-y-6">
+            {onThisDay.map((enc) => (
+              <div key={enc.id} className="grid grid-cols-1 md:grid-cols-2 gap-6 border border-earth/10 p-5 bg-parchment">
+                <div>
+                  <p className="font-mono text-[10px] text-earth/30 uppercase tracking-wider mb-2">{format(new Date(enc.date), "yyyy")} — then</p>
+                  <p className="font-serif text-sm text-earth/85 leading-snug mb-2">{enc.question}</p>
+                  {enc.answer && <p className="font-serif text-sm text-earth/70 italic border-l border-amber/30 pl-3">{enc.answer}</p>}
+                </div>
+                <div>
+                  <p className="font-mono text-[10px] text-earth/30 uppercase tracking-wider mb-2">Today — now</p>
+                  <p className="font-serif text-sm text-earth/85 leading-snug mb-2">{today.question}</p>
+                  {today.answer && <p className="font-serif text-sm text-earth/70 italic border-l border-amber/30 pl-3">{today.answer}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {history.length > 0 && (
         <div className="border-t border-earth/10 px-8 py-12 max-w-2xl mx-auto w-full">

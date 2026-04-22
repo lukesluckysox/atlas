@@ -2,10 +2,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { MapPin } from "lucide-react";
+import { MapPin, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 interface Pairing {
   id: string;
+  spotifyTrackId?: string | null;
   photoUrl: string;
   trackName: string;
   artistName: string;
@@ -13,14 +15,83 @@ interface Pairing {
   note?: string | null;
   location?: string | null;
   createdAt: Date;
+  photoLum?: number | null;
+  photoWarmth?: number | null;
+}
+
+// Mood quadrants — matches the portrait mood field sun-path metaphor.
+type Mood = "all" | "golden" | "noon" | "ember" | "midnight" | "balanced";
+
+const MOOD_CHIPS: { value: Mood; label: string; hint: string }[] = [
+  { value: "all", label: "All", hint: "" },
+  { value: "golden", label: "Golden hour", hint: "bright + warm" },
+  { value: "noon", label: "Noon", hint: "bright + cool" },
+  { value: "ember", label: "Ember", hint: "dark + warm" },
+  { value: "midnight", label: "Midnight", hint: "dark + cool" },
+  { value: "balanced", label: "Balanced", hint: "mid" },
+];
+
+function moodOf(p: Pairing): Mood | null {
+  if (p.photoLum == null || p.photoWarmth == null) return null;
+  const high = 0.62;
+  const low = 0.38;
+  const lumBand = p.photoLum >= high ? "bright" : p.photoLum <= low ? "dark" : "mid";
+  const warmBand =
+    p.photoWarmth >= high ? "warm" : p.photoWarmth <= low ? "cool" : "neutral";
+  if (lumBand === "bright" && warmBand === "warm") return "golden";
+  if (lumBand === "bright" && warmBand === "cool") return "noon";
+  if (lumBand === "dark" && warmBand === "warm") return "ember";
+  if (lumBand === "dark" && warmBand === "cool") return "midnight";
+  return "balanced";
 }
 
 export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
+  const [mood, setMood] = useState<Mood>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  // Count per mood (for chip badges). Only shows chips that actually have
+  // entries — no point offering empty filters.
+  const moodCounts = useMemo(() => {
+    const counts: Record<Mood, number> = {
+      all: pairings.length,
+      golden: 0,
+      noon: 0,
+      ember: 0,
+      midnight: 0,
+      balanced: 0,
+    };
+    for (const p of pairings) {
+      const m = moodOf(p);
+      if (m) counts[m]++;
+    }
+    return counts;
+  }, [pairings]);
+
+  const filtered = useMemo(() => {
+    if (mood === "all") return pairings;
+    return pairings.filter((p) => moodOf(p) === mood);
+  }, [pairings, mood]);
+
+  const openPairing = openId ? pairings.find((p) => p.id === openId) ?? null : null;
+
+  // Close lightbox on ESC
+  useEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openId]);
+
   if (pairings.length === 0) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-12">
         <p className="label mb-2">Tracks</p>
-        <h1 className="font-serif text-4xl text-earth mb-16">Archive</h1>
+        <h1 className="font-serif text-4xl text-earth">Archive</h1>
+        <p className="font-mono text-xs text-earth/40 mt-2 mb-16">
+          Every pairing you&rsquo;ve made. Nothing curated.
+        </p>
         <div className="border border-earth/10 p-16 text-center">
           <p className="font-mono text-sm text-earth/40">
             Nothing here yet. Go somewhere. Hear something.
@@ -35,69 +106,227 @@ export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 animate-page-in">
-      <div className="flex items-end justify-between mb-12">
+      <div className="flex items-end justify-between mb-8">
         <div>
           <p className="label mb-2">Tracks</p>
           <h1 className="font-serif text-4xl text-earth">Archive</h1>
+          <p className="font-mono text-xs text-earth/40 mt-2">
+            Every pairing you&rsquo;ve made. Nothing curated.
+          </p>
         </div>
         <p className="font-mono text-xs text-earth/40">
-          {pairings.length} pairings
+          {filtered.length}
+          {mood !== "all" && ` of ${pairings.length}`}
         </p>
       </div>
 
-      <div className="columns-2 md:columns-3 lg:columns-4 gap-px space-y-px">
-        {pairings.map((pairing) => (
-          <div key={pairing.id} className="break-inside-avoid group relative overflow-hidden bg-earth/5">
-            <div className="relative w-full" style={{ paddingBottom: "100%" }}>
-              <Image
-                src={pairing.photoUrl}
-                alt={pairing.trackName}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-700"
-                sizes="(max-width: 768px) 50vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-earth/90 via-earth/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 flex flex-col justify-end p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  {pairing.albumArt && (
-                    <Image
-                      src={pairing.albumArt}
-                      alt={pairing.trackName}
-                      width={28}
-                      height={28}
-                      className="shrink-0"
-                    />
+      {/* Mood chip row — filters by dominant light/warmth quadrant */}
+      <div className="flex flex-wrap gap-1.5 mb-10">
+        {MOOD_CHIPS.map((chip) => {
+          const count = moodCounts[chip.value];
+          // Hide mood chips with zero entries (keeps "All" always)
+          if (chip.value !== "all" && count === 0) return null;
+          const active = mood === chip.value;
+          return (
+            <button
+              key={chip.value}
+              onClick={() => setMood(chip.value)}
+              className={`px-2.5 py-1 border font-mono text-[10px] uppercase tracking-widest transition-all ${
+                active
+                  ? "border-earth text-earth bg-earth/5"
+                  : "border-earth/20 text-earth/60 hover:border-earth/50 hover:text-earth"
+              }`}
+              title={chip.hint}
+            >
+              {chip.label}
+              <span
+                className={`ml-1.5 ${active ? "text-earth/60" : "text-earth/30"}`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="border border-earth/10 p-16 text-center">
+          <p className="font-mono text-sm text-earth/40">
+            No pairings in this mood yet.
+          </p>
+        </div>
+      ) : (
+        <div className="columns-2 md:columns-3 lg:columns-4 gap-px space-y-px">
+          {filtered.map((pairing) => (
+            <button
+              key={pairing.id}
+              onClick={() => setOpenId(pairing.id)}
+              className="break-inside-avoid group relative overflow-hidden bg-earth/5 w-full text-left"
+            >
+              <div className="relative w-full" style={{ paddingBottom: "100%" }}>
+                <Image
+                  src={pairing.photoUrl}
+                  alt={pairing.trackName}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-700"
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-earth/90 via-earth/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 flex flex-col justify-end p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    {pairing.albumArt && (
+                      <Image
+                        src={pairing.albumArt}
+                        alt={pairing.trackName}
+                        width={28}
+                        height={28}
+                        className="shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-parchment truncate">
+                        {pairing.trackName}
+                      </p>
+                      <p className="font-mono text-xs text-parchment/60 truncate">
+                        {pairing.artistName}
+                      </p>
+                    </div>
+                  </div>
+                  {pairing.note && (
+                    <p className="font-mono text-xs text-parchment/70 line-clamp-2 mt-1">
+                      {pairing.note}
+                    </p>
                   )}
-                  <div className="min-w-0">
-                    <p className="font-mono text-xs text-parchment truncate">
-                      {pairing.trackName}
-                    </p>
-                    <p className="font-mono text-xs text-parchment/60 truncate">
-                      {pairing.artistName}
-                    </p>
+                  <div className="flex items-center justify-between mt-2">
+                    {pairing.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={10} className="text-amber" />
+                        <span className="font-mono text-xs text-parchment/60">
+                          {pairing.location}
+                        </span>
+                      </div>
+                    )}
+                    <span className="font-mono text-xs text-parchment/40 ml-auto">
+                      {format(new Date(pairing.createdAt), "MMM d")}
+                    </span>
                   </div>
                 </div>
-                {pairing.note && (
-                  <p className="font-mono text-xs text-parchment/70 line-clamp-2 mt-1">
-                    {pairing.note}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-2">
-                  {pairing.location && (
-                    <div className="flex items-center gap-1">
-                      <MapPin size={10} className="text-amber" />
-                      <span className="font-mono text-xs text-parchment/60">
-                        {pairing.location}
-                      </span>
-                    </div>
-                  )}
-                  <span className="font-mono text-xs text-parchment/40 ml-auto">
-                    {format(new Date(pairing.createdAt), "MMM d")}
-                  </span>
-                </div>
               </div>
-            </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox: photo + Spotify embed + meta. ESC or backdrop to close. */}
+      {openPairing && (
+        <Lightbox pairing={openPairing} onClose={() => setOpenId(null)} />
+      )}
+    </div>
+  );
+}
+
+function Lightbox({
+  pairing,
+  onClose,
+}: {
+  pairing: Pairing;
+  onClose: () => void;
+}) {
+  const m = moodOf(pairing);
+  const moodLabel = m
+    ? MOOD_CHIPS.find((c) => c.value === m)?.label
+    : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-earth/92 flex items-center justify-center p-4 md:p-10 animate-fade-in"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-6 right-6 text-parchment/70 hover:text-parchment transition-colors"
+      >
+        <X size={22} />
+      </button>
+
+      <div
+        className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-px bg-parchment/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Photo */}
+        <div className="relative bg-earth/20 aspect-square md:aspect-auto">
+          <Image
+            src={pairing.photoUrl}
+            alt={pairing.trackName}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 50vw"
+          />
+        </div>
+
+        {/* Track side */}
+        <div className="bg-parchment p-6 md:p-8 flex flex-col gap-5">
+          <div>
+            <p className="label mb-2">Pairing</p>
+            <p className="font-serif text-2xl text-earth leading-tight">
+              {pairing.trackName}
+            </p>
+            <p className="font-mono text-sm text-earth/60 mt-1">
+              {pairing.artistName}
+            </p>
           </div>
-        ))}
+
+          {pairing.spotifyTrackId && (
+            <iframe
+              src={`https://open.spotify.com/embed/track/${pairing.spotifyTrackId}?utm_source=trace`}
+              width="100%"
+              height="80"
+              frameBorder={0}
+              allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+              loading="lazy"
+              className="border border-earth/10"
+              title={pairing.trackName}
+            />
+          )}
+
+          {pairing.note && (
+            <blockquote className="font-serif text-base text-earth/80 italic leading-relaxed border-l-2 border-amber/40 pl-3">
+              {pairing.note}
+            </blockquote>
+          )}
+
+          {/* Meta strip: when / where / mood */}
+          <div className="mt-auto pt-4 border-t border-earth/10 grid grid-cols-2 gap-y-3 gap-x-4">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
+                When
+              </p>
+              <p className="font-mono text-xs text-earth/80 mt-1">
+                {format(new Date(pairing.createdAt), "MMM d, yyyy")}
+              </p>
+            </div>
+            {pairing.location && (
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
+                  Where
+                </p>
+                <p className="font-mono text-xs text-earth/80 mt-1 truncate">
+                  {pairing.location}
+                </p>
+              </div>
+            )}
+            {moodLabel && (
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
+                  Mood at the time
+                </p>
+                <p className="font-mono text-xs text-earth/80 mt-1">
+                  {moodLabel}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

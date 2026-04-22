@@ -40,6 +40,18 @@ const EXPERIENCE_TYPES = [
   { value: "notice", label: "Notice", icon: MapPin, color: "#C17F5A" },
 ];
 
+// Two-tier filter groups — top row is the primary toggle, the fine-grained
+// chips below only appear for the active group.
+const FILTER_GROUPS: { value: "places" | "moments" | "notices"; label: string; types: string[] }[] = [
+  {
+    value: "places",
+    label: "Places",
+    types: ["country", "national_park", "state", "trail", "restaurant", "stadium", "beach", "peak", "landmark"],
+  },
+  { value: "moments", label: "Moments", types: ["concert", "moment"] },
+  { value: "notices", label: "Notices", types: ["notice"] },
+];
+
 interface Experience {
   id: string;
   type: string;
@@ -104,6 +116,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
 
   // Active category layers. null = all enabled.
   const [activeTypes, setActiveTypes] = useState<Set<string> | null>(null);
+  // Which group's fine-grained chips are expanded (null = collapsed).
+  const [expandedGroup, setExpandedGroup] = useState<
+    "places" | "moments" | "notices" | null
+  >(null);
 
   // Shared selection: clicking a list row opens the pin; clicking a pin
   // highlights the row and scrolls it into view.
@@ -135,32 +151,49 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     else localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(Array.from(next)));
   };
 
-  const toggleType = (value: string) => {
+  const isTypeActive = (value: string) => activeTypes === null || activeTypes.has(value);
+
+  // Group helpers for the top-row primary filter.
+  const groupCount = (groupTypes: string[]) =>
+    experiences.filter((e) => groupTypes.includes(e.type)).length;
+
+  const isGroupFullyActive = (groupTypes: string[]) =>
+    groupTypes.every((t) => isTypeActive(t));
+
+  const isGroupPartiallyActive = (groupTypes: string[]) =>
+    groupTypes.some((t) => isTypeActive(t));
+
+  // Click on "All" — clear every filter.
+  const showAllGroups = () => {
+    setActiveTypes(null);
+    persistFilter(null);
+    setExpandedGroup(null);
+  };
+
+  // Click on a group — solo it (hide every type outside the group).
+  const soloGroup = (groupTypes: string[]) => {
+    const next = new Set(groupTypes);
+    setActiveTypes(next);
+    persistFilter(next);
+  };
+
+  // Toggle a single type within a group (second-tier chips).
+  const toggleGroupType = (groupTypes: string[], value: string) => {
     setActiveTypes((prev) => {
+      // Start from the group set so siblings outside the group stay hidden.
       const base = prev ?? new Set(EXPERIENCE_TYPES.map((t) => t.value));
       const next = new Set(base);
       if (next.has(value)) next.delete(value);
       else next.add(value);
-      // If user re-enabled everything, collapse back to null
+      // If every group type is back in and it equals the full set — collapse to null.
       const isAll = next.size === EXPERIENCE_TYPES.length;
       const final = isAll ? null : next;
       persistFilter(final);
       return final;
     });
+    // Suppress unused warning — groupTypes reserved for future partial-collapse logic.
+    void groupTypes;
   };
-
-  const soloType = (value: string) => {
-    const next = new Set<string>([value]);
-    setActiveTypes(next);
-    persistFilter(next);
-  };
-
-  const resetFilter = () => {
-    setActiveTypes(null);
-    persistFilter(null);
-  };
-
-  const isTypeActive = (value: string) => activeTypes === null || activeTypes.has(value);
 
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -340,6 +373,9 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
         <div>
           <p className="label mb-2">Path</p>
           <h1 className="font-serif text-4xl text-earth">Life map</h1>
+          <p className="font-mono text-xs text-earth/40 mt-2">
+            Where you&rsquo;ve been. What it was.
+          </p>
         </div>
         <button
           onClick={() => {
@@ -384,26 +420,68 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
             />
           </div>
 
-          {/* Layer filter chips — click to toggle, shift+click or long-press "Only" to solo */}
+          {/* Two-tier filter: primary groups + fine-grained chips per group */}
           <div className="mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="label">Layers</p>
-              {activeTypes !== null && (
-                <button
-                  onClick={resetFilter}
-                  className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth"
-                >
-                  Show all
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {EXPERIENCE_TYPES.map((t) => {
-                const active = isTypeActive(t.value);
+            <p className="label mb-2">Layers</p>
+
+            {/* Top row — 4 wide buttons */}
+            <div className="grid grid-cols-4 gap-px bg-earth/10 mb-2">
+              <button
+                onClick={showAllGroups}
+                className={`bg-parchment px-3 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors ${
+                  activeTypes === null
+                    ? "text-earth bg-earth/5"
+                    : "text-earth/50 hover:text-earth"
+                }`}
+              >
+                All
+                <span className="ml-1.5 text-earth/40">{experiences.length}</span>
+              </button>
+              {FILTER_GROUPS.map((g) => {
+                const count = groupCount(g.types);
+                const full = isGroupFullyActive(g.types);
+                const partial = isGroupPartiallyActive(g.types);
+                const active = activeTypes !== null && partial;
                 return (
-                  <div key={t.value} className="group relative">
+                  <button
+                    key={g.value}
+                    onClick={() => {
+                      // First click: solo the group. Second click on the same
+                      // already-soloed group: expand its fine-grained chips.
+                      if (active && full) {
+                        setExpandedGroup(
+                          expandedGroup === g.value ? null : g.value
+                        );
+                      } else {
+                        soloGroup(g.types);
+                        setExpandedGroup(g.value);
+                      }
+                    }}
+                    className={`bg-parchment px-3 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors ${
+                      active
+                        ? "text-earth bg-earth/5"
+                        : "text-earth/50 hover:text-earth"
+                    }`}
+                  >
+                    {g.label}
+                    <span className="ml-1.5 text-earth/40">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Second tier — only the active group's fine-grained chips */}
+            {expandedGroup && (
+              <div className="flex flex-wrap gap-1.5 mt-3 animate-fade-in">
+                {EXPERIENCE_TYPES.filter((t) =>
+                  FILTER_GROUPS.find((g) => g.value === expandedGroup)?.types.includes(t.value)
+                ).map((t) => {
+                  const active = isTypeActive(t.value);
+                  const group = FILTER_GROUPS.find((g) => g.value === expandedGroup)!;
+                  return (
                     <button
-                      onClick={() => toggleType(t.value)}
+                      key={t.value}
+                      onClick={() => toggleGroupType(group.types, t.value)}
                       className={`flex items-center gap-1.5 px-2 py-1 border font-mono text-[10px] uppercase tracking-widest transition-all ${
                         active
                           ? "border-earth/30 text-earth/80 bg-parchment"
@@ -419,18 +497,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                       />
                       {t.label}
                     </button>
-                    <button
-                      onClick={() => soloType(t.value)}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-earth text-parchment font-mono text-[8px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                      title={`Show only ${t.label}`}
-                      aria-label={`Show only ${t.label}`}
-                    >
-                      1
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

@@ -2,10 +2,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MapPin, Music, Compass, Pencil } from "lucide-react";
 
 interface HomeDashboardProps {
-  user: { name?: string | null; isPro?: boolean };
   recentPairings: Array<{
     id: string;
     photoUrl: string;
@@ -17,100 +15,145 @@ interface HomeDashboardProps {
   experienceCount: number;
   encounterToday: { question: string; landed?: boolean | null } | null;
   recentMarks: Array<{ id: string; content: string; createdAt: Date }>;
+  pairingsToday: number;
+  marksToday: number;
+  latestExperience: { name: string; location?: string | null } | null;
 }
 
 export function HomeDashboard({
-  user,
   recentPairings,
   experienceCount,
   encounterToday,
   recentMarks,
+  pairingsToday,
+  marksToday,
+  latestExperience,
 }: HomeDashboardProps) {
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Morning." : hour < 17 ? "Afternoon." : "Evening.";
 
+  const lastPairing = recentPairings[0];
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-16">
+      <div className="mb-12">
         <p className="label mb-2">{format(new Date(), "EEEE, MMMM d")}</p>
         <h1 className="font-serif text-4xl text-earth">{greeting}</h1>
+        <p className="font-mono text-xs text-earth/40 mt-2">
+          A photo, a place, a thing you noticed. That&rsquo;s the whole idea.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
-        {encounterToday && (
-          <div className="lg:col-span-2 border border-earth/10 p-8 bg-earth/2">
-            <p className="label mb-6">Today&rsquo;s question</p>
-            <blockquote className="font-serif text-xl md:text-2xl text-earth leading-relaxed mb-8">
+      {/* Today-strip: three cells, each one action. Instant legibility. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-earth/10 mb-16">
+        {/* Cell 1: Encounter (or Notice prompt if no encounter) */}
+        {encounterToday ? (
+          <Link
+            href="/encounter"
+            className="bg-parchment p-6 hover:bg-earth/2 transition-colors group flex flex-col justify-between min-h-[180px]"
+          >
+            <p className="label">Today&rsquo;s question</p>
+            <blockquote className="font-serif text-base text-earth leading-snug my-4 line-clamp-3">
               {encounterToday.question}
             </blockquote>
-            {encounterToday.landed === null || encounterToday.landed === undefined ? (
-              <Link href="/encounter" className="btn-secondary inline-block text-sm">
-                Notice it
-              </Link>
-            ) : (
-              <p className="font-mono text-xs text-earth/40">
-                {encounterToday.landed ? "Landed." : "Didn't land."}
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 group-hover:text-amber transition-colors">
+              {encounterToday.landed === null || encounterToday.landed === undefined
+                ? "Answer →"
+                : encounterToday.landed
+                ? "Landed ✓"
+                : "Didn’t land"}
+            </p>
+          </Link>
+        ) : (
+          <Link
+            href="/mark"
+            className="bg-parchment p-6 hover:bg-earth/2 transition-colors group flex flex-col justify-between min-h-[180px]"
+          >
+            <p className="label">Today</p>
+            <p className="font-serif text-2xl text-earth my-4">
+              {marksToday === 0 ? "Nothing noticed yet." : `${marksToday} noticed.`}
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 group-hover:text-amber transition-colors">
+              {marksToday === 0 ? "Notice something →" : "Add another →"}
+            </p>
+          </Link>
+        )}
+
+        {/* Cell 2: Last pairing (with thumb) or CTA */}
+        {lastPairing ? (
+          <Link
+            href="/explore"
+            className="bg-parchment hover:bg-earth/2 transition-colors group relative overflow-hidden min-h-[180px]"
+          >
+            <Image
+              src={lastPairing.photoUrl}
+              alt={lastPairing.trackName}
+              fill
+              className="object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-earth/90 via-earth/30 to-transparent" />
+            <div className="relative p-6 h-full flex flex-col justify-between min-h-[180px]">
+              <p className="label text-parchment/70">Last pairing</p>
+              <div>
+                <p className="font-serif text-base text-parchment leading-tight truncate">
+                  {lastPairing.trackName}
+                </p>
+                <p className="font-mono text-xs text-parchment/70 truncate">
+                  {lastPairing.artistName}
+                </p>
+              </div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-parchment/60 group-hover:text-amber transition-colors">
+                Archive →
+              </p>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            href="/pair"
+            className="bg-parchment p-6 hover:bg-earth/2 transition-colors group flex flex-col justify-between min-h-[180px]"
+          >
+            <p className="label">Tracks</p>
+            <p className="font-serif text-2xl text-earth my-4">
+              First pairing.
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 group-hover:text-amber transition-colors">
+              A photo, a track →
+            </p>
+          </Link>
+        )}
+
+        {/* Cell 3: Path count + last place */}
+        <Link
+          href="/map"
+          className="bg-parchment p-6 hover:bg-earth/2 transition-colors group flex flex-col justify-between min-h-[180px]"
+        >
+          <p className="label">Path</p>
+          <div className="my-4">
+            <p className="font-serif text-3xl text-earth leading-none">
+              {experienceCount}
+            </p>
+            <p className="font-mono text-xs text-earth/50 mt-1">
+              {experienceCount === 1 ? "place" : "places"}
+            </p>
+            {latestExperience && (
+              <p className="font-mono text-xs text-earth/60 mt-3 truncate">
+                Last: {latestExperience.name}
               </p>
             )}
           </div>
-        )}
-
-        <div className="flex flex-col gap-4">
-          <Link
-            href="/pair"
-            className="flex items-center gap-4 border border-earth/10 p-6 hover:border-amber transition-colors group"
-          >
-            <Music size={18} className="text-amber" />
-            <div>
-              <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
-                New pairing
-              </p>
-              <p className="font-mono text-xs text-earth/40">Tracks</p>
-            </div>
-          </Link>
-          <Link
-            href="/map"
-            className="flex items-center gap-4 border border-earth/10 p-6 hover:border-amber transition-colors group"
-          >
-            <MapPin size={18} className="text-amber" />
-            <div>
-              <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
-                Log experience
-              </p>
-              <p className="font-mono text-xs text-earth/40">
-                {experienceCount} places
-              </p>
-            </div>
-          </Link>
-          <Link
-            href="/mark"
-            className="flex items-center gap-4 border border-earth/10 p-6 hover:border-amber transition-colors group"
-          >
-            <Pencil size={18} className="text-amber" />
-            <div>
-              <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
-                Notice something
-              </p>
-              <p className="font-mono text-xs text-earth/40">Raw observation</p>
-            </div>
-          </Link>
-          {user.isPro && (
-            <Link
-              href="/portrait"
-              className="flex items-center gap-4 border border-amber/30 bg-amber/5 p-6 hover:border-amber transition-colors group"
-            >
-              <Compass size={18} className="text-amber" />
-              <div>
-                <p className="font-serif text-sm text-earth group-hover:text-amber transition-colors">
-                  Your portrait
-                </p>
-                <p className="font-mono text-xs text-earth/40">Pro</p>
-              </div>
-            </Link>
-          )}
-        </div>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 group-hover:text-amber transition-colors">
+            {experienceCount === 0 ? "Log your first →" : "Open map →"}
+          </p>
+        </Link>
       </div>
+
+      {pairingsToday > 0 && (
+        <p className="font-mono text-xs text-earth/40 mb-8 -mt-8">
+          {pairingsToday} {pairingsToday === 1 ? "pairing" : "pairings"} today.
+        </p>
+      )}
 
       {recentPairings.length > 0 && (
         <div className="mb-16">

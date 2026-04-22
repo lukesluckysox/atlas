@@ -87,7 +87,10 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
       <div className="flex items-end justify-between mb-12">
         <div>
           <p className="label mb-2">Portrait</p>
-          <h1 className="font-serif text-4xl text-earth">What Trace sees.</h1>
+          <h1 className="font-serif text-4xl text-earth">What Trace sees</h1>
+          <p className="font-mono text-xs text-earth/40 mt-2">
+            Light, sound, distance. Your signal.
+          </p>
         </div>
         <button
           onClick={generate}
