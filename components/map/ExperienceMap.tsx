@@ -1206,7 +1206,13 @@ function RoadCityPicker({
       const r = await fetch(`/api/places/search?q=${encodeURIComponent(v)}`);
       if (r.ok) {
         const raw = await r.json();
-        setResults(Array.isArray(raw) ? raw.slice(0, 5) : []);
+        // Endpoint returns { results: [...] }; be forgiving of either shape.
+        const list: PlaceResult[] = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.results)
+          ? raw.results
+          : [];
+        setResults(list.slice(0, 5));
       }
     } finally {
       setLoading(false);
