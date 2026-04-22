@@ -407,6 +407,11 @@ function TreeCanvas({
             onMouseEnter={() => onFocus(p.branch.name)}
             onMouseLeave={() => onFocus(null)}
           >
+            <title>
+              {p.branch.name}
+              {p.branch.rank ? ` — #${p.branch.rank}` : ""}
+              {p.branch.recentPlays ? ` · ${p.branch.recentPlays} recent play${p.branch.recentPlays === 1 ? "" : "s"}` : ""}
+            </title>
             <circle
               cx={p.tipX}
               cy={p.tipY}
@@ -475,15 +480,11 @@ function ArtistLabel({
   const anchor = side === "R" ? "start" : "end";
   const display = name.length > 22 ? `${name.slice(0, 20)}…` : name;
 
-  // Build an honest meta string. Spotify Web API does not expose true play
-  // counts, so we show rank (#1, #2, ...) and — if any — real plays from the
-  // recently-played window.
-  const parts: string[] = [];
-  if (rank && rank > 0) parts.push(`#${rank}`);
-  if (recentPlays && recentPlays > 0) {
-    parts.push(`${recentPlays} recent play${recentPlays === 1 ? "" : "s"}`);
-  }
-  const meta = parts.join(" · ");
+  // Honest, minimal meta: a small rank pip if present, nothing else. Spotify
+  // doesn't expose true scrobble counts, so the visual (branch thickness,
+  // leaf cluster size) carries the intensity signal — not a number.
+  const meta = rank && rank > 0 ? `#${rank}` : "";
+  void recentPlays; // intentionally unused: shown via hover tooltip only
 
   return (
     <>

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { TraceMeta } from "@/components/ui/TraceMeta";
+import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import {
   Plus,
   MapPin,
@@ -97,9 +99,21 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const save = useSaveState();
 
   // Active category layers. null = all enabled.
   const [activeTypes, setActiveTypes] = useState<Set<string> | null>(null);
+
+  // Shared selection: clicking a list row opens the pin; clicking a pin
+  // highlights the row and scrolls it into view.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = rowRefs.current[selectedId];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedId]);
 
   // Hydrate filter from localStorage once
   useEffect(() => {
@@ -231,32 +245,32 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
     }
 
     setSaving(true);
-    try {
+    const payload = {
+      type: form.type,
+      name,
+      location: location || undefined,
+      latitude: form.latitude ?? undefined,
+      longitude: form.longitude ?? undefined,
+      date: form.date || undefined,
+      note: form.note || undefined,
+    };
+    const result = await save.run(async () => {
       const res = await fetch("/api/experiences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: form.type,
-          name,
-          location: location || undefined,
-          latitude: form.latitude ?? undefined,
-          longitude: form.longitude ?? undefined,
-          date: form.date || undefined,
-          note: form.note || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data: { error?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      return data;
+    });
+    setSaving(false);
+    if (result) {
       toast.success("Noted. Add another.");
-      // Keep drawer open and preserve the current type, but clear the rest
-      // so the user can rapid-fire multiple entries in the same category.
       setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
       router.refresh();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Could not save.";
-      toast.error(msg);
-    } finally {
-      setSaving(false);
+    } else {
+      toast.error("Could not save.");
     }
   };
 
@@ -326,6 +340,8 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
           <div className="aspect-square border border-earth/10 overflow-hidden">
             <MapView
               experiences={geoExperiences}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
               onDelete={(id) => {
                 const exp = experiences.find((e) => e.id === id);
                 if (exp) void handleDelete(exp);
@@ -390,6 +406,8 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
               form={form}
               setForm={setForm}
               saving={saving}
+              saveState={save.state}
+              onRetry={save.retry}
               isPro={isPro}
               suggestions={suggestions}
               showSuggestions={showSuggestions}
@@ -427,10 +445,27 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                   visibleExperiences.slice(0, 12).map((exp) => {
                     const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
                     const TypeIcon = typeMeta?.icon ?? MapPin;
+                    const isSelected = selectedId === exp.id;
+                    const hasGeo = exp.latitude != null && exp.longitude != null;
                     return (
                       <div
                         key={exp.id}
-                        className="group flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0"
+                        ref={(el) => {
+                          rowRefs.current[exp.id] = el;
+                        }}
+                        onClick={() => {
+                          if (!hasGeo) return;
+                          setSelectedId(isSelected ? null : exp.id);
+                        }}
+                        className={`group flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0 transition-colors ${
+                          hasGeo ? "cursor-pointer" : ""
+                        } ${
+                          isSelected
+                            ? "bg-amber/10 border-l-2 border-l-amber"
+                            : hasGeo
+                            ? "hover:bg-earth/5"
+                            : ""
+                        }`}
                       >
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
@@ -451,7 +486,10 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                           </p>
                         )}
                         <button
-                          onClick={() => handleDelete(exp)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(exp);
+                          }}
                           disabled={deletingId === exp.id}
                           className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity disabled:opacity-30"
                           aria-label="Delete entry"
@@ -477,32 +515,50 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
             {visibleExperiences.map((exp) => {
               const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
               const TypeIcon = typeMeta?.icon ?? MapPin;
+              const isSelected = selectedId === exp.id;
+              const hasGeo = exp.latitude != null && exp.longitude != null;
               return (
                 <div
                   key={exp.id}
-                  className="group flex items-center gap-6 py-4 border-b border-earth/5"
+                  ref={(el) => {
+                    rowRefs.current[exp.id] = el;
+                  }}
+                  onClick={() => {
+                    if (!hasGeo) return;
+                    setSelectedId(isSelected ? null : exp.id);
+                  }}
+                  className={`group flex items-center gap-6 py-4 border-b border-earth/5 transition-colors ${
+                    hasGeo ? "cursor-pointer" : ""
+                  } ${
+                    isSelected
+                      ? "bg-amber/10 border-l-2 border-l-amber pl-3"
+                      : hasGeo
+                      ? "hover:bg-earth/5"
+                      : ""
+                  }`}
                 >
                   <span
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: typeMeta?.color || "#D4A843" }}
                   />
                   <TypeIcon size={14} className="text-earth/40 shrink-0" />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-[2] min-w-0">
                     <p className="font-mono text-sm text-earth">{exp.name}</p>
-                    {exp.location && (
-                      <p className="font-mono text-xs text-earth/40">{exp.location}</p>
-                    )}
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="flex-1 min-w-0 hidden sm:block">
                     <p className="label text-xs">{typeMeta?.label}</p>
-                    {exp.date && (
-                      <p className="font-mono text-xs text-earth/30 mt-1">
-                        {format(new Date(exp.date), "MMM yyyy")}
-                      </p>
-                    )}
+                    <TraceMeta
+                      date={exp.date ?? undefined}
+                      location={exp.location ?? undefined}
+                      size="sm"
+                      className="mt-1"
+                    />
                   </div>
                   <button
-                    onClick={() => handleDelete(exp)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(exp);
+                    }}
                     disabled={deletingId === exp.id}
                     className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity disabled:opacity-30"
                     aria-label="Delete entry"
@@ -536,12 +592,16 @@ interface LogPanelProps {
   selectSuggestion: (s: PlaceResult) => void;
   onClose: () => void;
   onSave: () => void;
+  saveState: import("@/components/ui/SaveChip").SaveStatus;
+  onRetry: () => void;
 }
 
 function LogPanel({
   form,
   setForm,
   saving,
+  saveState,
+  onRetry,
   isPro,
   suggestions,
   showSuggestions,
@@ -552,23 +612,36 @@ function LogPanel({
   onSave,
 }: LogPanelProps) {
   const isConcert = form.type === "concert";
+  const [showMore, setShowMore] = useState(false);
+
+  // Auto-expand "More details" when an optional field already has content,
+  // so editing an entry pre-reveals what's filled.
+  useEffect(() => {
+    if (!showMore && (form.note || (isConcert && form.venue) || (!isConcert && form.location))) {
+      setShowMore(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="border border-earth/10 bg-parchment h-full overflow-y-auto">
-      <div className="px-5 py-4 border-b border-earth/10 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-earth/10 flex items-center justify-between gap-3">
         <div>
           <p className="label">Log experience</p>
           <p className="font-mono text-[10px] text-earth/40 mt-0.5">
             Drawer stays open — log as many as you want.
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="text-earth/40 hover:text-earth"
-          aria-label="Close"
-        >
-          <X size={14} />
-        </button>
+        <div className="flex items-center gap-2">
+          <SaveChip state={saveState} onRetry={onRetry} />
+          <button
+            onClick={onClose}
+            className="text-earth/40 hover:text-earth"
+            aria-label="Close"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="p-6 space-y-5">
@@ -603,126 +676,138 @@ function LogPanel({
           </div>
         </div>
 
+        {/* CORE fields — always visible. Keeps initiation to ~3 steps. */}
         {isConcert ? (
-          <>
-            <input
-              type="text"
-              placeholder="Artist / band *"
-              value={form.artist}
-              onChange={(e) => setForm((f) => ({ ...f, artist: e.target.value }))}
-              className="input-field"
-              autoComplete="off"
-            />
-            <input
-              type="text"
-              placeholder="Venue (e.g. Red Rocks Amphitheatre)"
-              value={form.venue}
-              onChange={(e) => setForm((f) => ({ ...f, venue: e.target.value }))}
-              className="input-field"
-              autoComplete="off"
-            />
-            <div className="relative">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="City (start typing to search)"
-                  value={form.city}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      city: e.target.value,
-                      latitude: null,
-                      longitude: null,
-                    }))
-                  }
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  className="input-field pr-8"
-                  autoComplete="off"
-                />
-                {searching && (
-                  <Search
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
-                  />
-                )}
-              </div>
-              {showSuggestions && suggestions.length > 0 && (
-                <SuggestionsDropdown
-                  suggestions={suggestions}
-                  onPick={selectSuggestion}
-                />
-              )}
-            </div>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-              className="input-field"
-            />
-            <textarea
-              placeholder="Note (opening act, who you went with, how it felt)"
-              value={form.note}
-              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-              rows={2}
-              className="input-field resize-none"
-            />
-          </>
+          <input
+            type="text"
+            placeholder="Artist / band *"
+            value={form.artist}
+            onChange={(e) => setForm((f) => ({ ...f, artist: e.target.value }))}
+            className="input-field"
+            autoComplete="off"
+          />
         ) : (
-          <>
+          <div className="relative">
             <div className="relative">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Name * (start typing to search)"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      name: e.target.value,
-                      latitude: null,
-                      longitude: null,
-                    }))
-                  }
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  className="input-field pr-8"
-                  autoComplete="off"
-                />
-                {searching && (
-                  <Search
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
-                  />
-                )}
-              </div>
-              {showSuggestions && suggestions.length > 0 && (
-                <SuggestionsDropdown
-                  suggestions={suggestions}
-                  onPick={selectSuggestion}
+              <input
+                type="text"
+                placeholder="Name * (start typing to search)"
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    name: e.target.value,
+                    latitude: null,
+                    longitude: null,
+                  }))
+                }
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                className="input-field pr-8"
+                autoComplete="off"
+              />
+              {searching && (
+                <Search
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
                 />
               )}
             </div>
-            <input
-              type="text"
-              placeholder="Location (optional)"
-              value={form.location}
-              onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-              className="input-field"
-            />
-            <input
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-              className="input-field"
-            />
-            <textarea
-              placeholder="Note (optional)"
-              value={form.note}
-              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-              rows={2}
-              className="input-field resize-none"
-            />
-          </>
+            {showSuggestions && suggestions.length > 0 && (
+              <SuggestionsDropdown
+                suggestions={suggestions}
+                onPick={selectSuggestion}
+              />
+            )}
+          </div>
         )}
+
+        <input
+          type="date"
+          value={form.date}
+          onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+          className="input-field"
+        />
+
+        {/* Concert's "City" is how it geolocates, so we keep it visible. */}
+        {isConcert && (
+          <div className="relative">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="City * (start typing to search)"
+                value={form.city}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    city: e.target.value,
+                    latitude: null,
+                    longitude: null,
+                  }))
+                }
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                className="input-field pr-8"
+                autoComplete="off"
+              />
+              {searching && (
+                <Search
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
+                />
+              )}
+            </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <SuggestionsDropdown
+                suggestions={suggestions}
+                onPick={selectSuggestion}
+              />
+            )}
+          </div>
+        )}
+
+        {/* OPTIONAL fields — collapsed by default */}
+        <div className="border-t border-earth/10 pt-4">
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className="w-full flex items-center justify-between text-left font-mono text-[10px] uppercase tracking-widest text-earth/50 hover:text-earth transition-colors"
+          >
+            <span>{showMore ? "Hide details" : "More details"}</span>
+            <span className="text-earth/30">{showMore ? "−" : "+"}</span>
+          </button>
+          {showMore && (
+            <div className="mt-3 space-y-3">
+              {isConcert ? (
+                <input
+                  type="text"
+                  placeholder="Venue (e.g. Red Rocks Amphitheatre)"
+                  value={form.venue}
+                  onChange={(e) => setForm((f) => ({ ...f, venue: e.target.value }))}
+                  className="input-field"
+                  autoComplete="off"
+                />
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Location (optional)"
+                  value={form.location}
+                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                  className="input-field"
+                />
+              )}
+              <textarea
+                placeholder={
+                  isConcert
+                    ? "Note (opening act, who you went with, how it felt)"
+                    : "Note (optional)"
+                }
+                value={form.note}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                rows={2}
+                className="input-field resize-none"
+              />
+            </div>
+          )}
+        </div>
 
         {!isPro && (
           <p className="font-mono text-xs text-earth/40">

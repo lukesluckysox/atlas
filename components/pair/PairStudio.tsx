@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
 import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
+import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 
 interface Track {
   id: string;
@@ -34,6 +35,7 @@ export function PairStudio({ isPro }: PairStudioProps) {
   const [searching, setSearching] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [saving, setSaving] = useState(false);
+  const save = useSaveState();
   const [mode, setMode] = useState<"search" | "recommend">("search");
 
   const handlePhotoSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,7 +124,7 @@ export function PairStudio({ isPro }: PairStudioProps) {
       return;
     }
     setSaving(true);
-    try {
+    const result = await save.run(async () => {
       const res = await fetch("/api/pairings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,12 +139,14 @@ export function PairStudio({ isPro }: PairStudioProps) {
         }),
       });
       if (!res.ok) throw new Error("Save failed");
+      return res.json();
+    });
+    setSaving(false);
+    if (result) {
       toast.success("Pairing saved.");
       router.push("/explore");
-    } catch {
+    } else {
       toast.error("Could not save pairing.");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -150,12 +154,17 @@ export function PairStudio({ isPro }: PairStudioProps) {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-8">
-        <p className="label mb-2">Tracks</p>
-        <h1 className="font-serif text-4xl text-earth">New pairing</h1>
-        <p className="font-mono text-xs text-earth/40 mt-2">
-          A photo. A track. Pure instinct.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <p className="label mb-2">Tracks</p>
+          <h1 className="font-serif text-4xl text-earth">New pairing</h1>
+          <p className="font-mono text-xs text-earth/40 mt-2">
+            A photo. A track. Pure instinct.
+          </p>
+        </div>
+        <div className="pt-1">
+          <SaveChip state={save.state} onRetry={save.retry} />
+        </div>
       </div>
 
       <div className="mb-12">
