@@ -42,7 +42,7 @@ const EXPERIENCE_TYPES = [
 
 // Two-tier filter groups — top row is the primary toggle, the fine-grained
 // chips below only appear for the active group.
-const FILTER_GROUPS: { value: "places" | "moments" | "notices"; label: string; types: string[] }[] = [
+const FILTER_GROUPS: { value: "places" | "moments" | "notices" | "roads"; label: string; types: string[] }[] = [
   {
     value: "places",
     label: "Places",
@@ -50,6 +50,14 @@ const FILTER_GROUPS: { value: "places" | "moments" | "notices"; label: string; t
   },
   { value: "moments", label: "Moments", types: ["concert", "moment"] },
   { value: "notices", label: "Notices", types: ["notice"] },
+  { value: "roads", label: "Roads", types: ["road"] },
+];
+
+const ROAD_SUBTYPES = [
+  { value: "interstate", label: "Interstate", color: "#D4A843" },
+  { value: "us_route", label: "US Route", color: "#C17F5A" },
+  { value: "state", label: "State", color: "#7A8C6E" },
+  { value: "scenic", label: "Scenic", color: "#8B5A9F" },
 ];
 
 interface Experience {
@@ -72,10 +80,24 @@ interface PlaceResult {
   kind: string;
 }
 
+export interface RoadStretch {
+  id: string;
+  name: string;
+  ref: string | null;
+  category: string | null;
+  startLabel: string;
+  endLabel: string;
+  distanceMi: number;
+  drivenAt: string | null;
+  drivenNote: string | null;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+}
+
 interface Props {
   experiences: Experience[];
   stats: { total: number; countries: number; nationalParks: number; concerts: number };
   isPro: boolean;
+  roads?: RoadStretch[];
 }
 
 interface FormState {
@@ -107,7 +129,7 @@ const INITIAL_FORM: FormState = {
 
 const FILTER_STORAGE_KEY = "trace:map-filter";
 
-export function ExperienceMap({ experiences, stats, isPro }: Props) {
+export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -118,8 +140,12 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const [activeTypes, setActiveTypes] = useState<Set<string> | null>(null);
   // Which group's fine-grained chips are expanded (null = collapsed).
   const [expandedGroup, setExpandedGroup] = useState<
-    "places" | "moments" | "notices" | null
+    "places" | "moments" | "notices" | "roads" | null
   >(null);
+
+  // Road-subtype filter (interstate/us_route/state/scenic). null = all shown.
+  const [activeRoadCats, setActiveRoadCats] = useState<Set<string> | null>(null);
+  const [selectedRoadId, setSelectedRoadId] = useState<string | null>(null);
 
   // Shared selection: clicking a list row opens the pin; clicking a pin
   // highlights the row and scrolls it into view.
@@ -153,9 +179,23 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
 
   const isTypeActive = (value: string) => activeTypes === null || activeTypes.has(value);
 
+  // Roads visibility + helpers — roads are a pseudo-type ("road") with no
+  // matching Experience records, so we track visibility via activeTypes in
+  // the same way: null = all shown, set containing "road" = shown.
+  const roadsVisible = activeTypes === null || activeTypes.has("road");
+
+  // Filtered list of roads respecting the second-tier subcategory chips.
+  const visibleRoads = roads.filter((r) => {
+    if (!roadsVisible) return false;
+    if (!activeRoadCats) return true;
+    return activeRoadCats.has(r.category || "scenic");
+  });
+
   // Group helpers for the top-row primary filter.
-  const groupCount = (groupTypes: string[]) =>
-    experiences.filter((e) => groupTypes.includes(e.type)).length;
+  const groupCount = (groupTypes: string[]) => {
+    if (groupTypes.includes("road")) return roads.length;
+    return experiences.filter((e) => groupTypes.includes(e.type)).length;
+  };
 
   const isGroupFullyActive = (groupTypes: string[]) =>
     groupTypes.every((t) => isTypeActive(t));
@@ -417,6 +457,19 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                 if (exp) void handleDelete(exp);
               }}
               onLongPress={handleLongPress}
+              roads={visibleRoads}
+              selectedRoadId={selectedRoadId}
+              onSelectRoad={setSelectedRoadId}
+              onDeleteRoad={async (id) => {
+                if (!confirm("Remove this stretch?")) return;
+                const r = await fetch(`/api/roads/${id}`, { method: "DELETE" });
+                if (r.ok) {
+                  toast.success("Removed.");
+                  router.refresh();
+                } else {
+                  toast.error("Failed to remove.");
+                }
+              }}
             />
           </div>
 
@@ -435,7 +488,7 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                 }`}
               >
                 All
-                <span className="ml-1.5 text-earth/40">{experiences.length}</span>
+                <span className="ml-1.5 text-earth/40">{experiences.length + roads.length}</span>
               </button>
               {FILTER_GROUPS.map((g) => {
                 const count = groupCount(g.types);
@@ -471,7 +524,47 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
             </div>
 
             {/* Second tier — only the active group's fine-grained chips */}
-            {expandedGroup && (
+            {expandedGroup === "roads" && (
+              <div className="flex flex-wrap gap-1.5 mt-3 animate-fade-in">
+                {ROAD_SUBTYPES.map((rc) => {
+                  const count = roads.filter((r) => (r.category || "scenic") === rc.value).length;
+                  const active = !activeRoadCats || activeRoadCats.has(rc.value);
+                  return (
+                    <button
+                      key={rc.value}
+                      onClick={() => {
+                        setActiveRoadCats((prev) => {
+                          const base = prev ?? new Set(ROAD_SUBTYPES.map((s) => s.value));
+                          const next = new Set(base);
+                          if (next.has(rc.value)) next.delete(rc.value);
+                          else next.add(rc.value);
+                          return next.size === ROAD_SUBTYPES.length ? null : next;
+                        });
+                      }}
+                      className={`flex items-center gap-1.5 px-2 py-1 border font-mono text-[10px] uppercase tracking-widest transition-all ${
+                        active
+                          ? "border-earth/30 text-earth/80 bg-parchment"
+                          : "border-earth/10 text-earth/25 line-through"
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full border ${active ? "border-earth" : "border-earth/20"}`}
+                        style={{ backgroundColor: active ? rc.color : "transparent" }}
+                      />
+                      {rc.label}
+                      <span className="text-earth/40">{count}</span>
+                    </button>
+                  );
+                })}
+                <a
+                  href="/road"
+                  className="flex items-center gap-1.5 px-2 py-1 border border-earth/30 text-earth/70 hover:text-earth hover:border-earth font-mono text-[10px] uppercase tracking-widest"
+                >
+                  + Trace a road
+                </a>
+              </div>
+            )}
+            {expandedGroup && expandedGroup !== "roads" && (
               <div className="flex flex-wrap gap-1.5 mt-3 animate-fade-in">
                 {EXPERIENCE_TYPES.filter((t) =>
                   FILTER_GROUPS.find((g) => g.value === expandedGroup)?.types.includes(t.value)

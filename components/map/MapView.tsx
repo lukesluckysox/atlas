@@ -4,6 +4,7 @@ import {
   TileLayer,
   Marker,
   Popup,
+  Polyline,
   useMap,
   useMapEvents,
   CircleMarker,
@@ -78,18 +79,46 @@ interface Experience {
   location?: string | null;
 }
 
+interface RoadStretch {
+  id: string;
+  name: string;
+  ref: string | null;
+  category: string | null;
+  startLabel: string;
+  endLabel: string;
+  distanceMi: number;
+  drivenAt: string | null;
+  drivenNote: string | null;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+}
+
+const ROAD_COLORS: Record<string, string> = {
+  interstate: "#D4A843",
+  us_route: "#C17F5A",
+  state: "#7A8C6E",
+  scenic: "#8B5A9F",
+};
+
 export default function MapView({
   experiences,
   onDelete,
   selectedId,
   onSelect,
   onLongPress,
+  roads = [],
+  selectedRoadId,
+  onSelectRoad,
+  onDeleteRoad,
 }: {
   experiences: Experience[];
   onDelete?: (id: string) => void;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onLongPress?: (lat: number, lng: number) => void;
+  roads?: RoadStretch[];
+  selectedRoadId?: string | null;
+  onSelectRoad?: (id: string | null) => void;
+  onDeleteRoad?: (id: string) => void;
 }) {
   const validExps = experiences.filter((e) => e.latitude && e.longitude);
   const center: [number, number] =
@@ -114,6 +143,51 @@ export default function MapView({
         selectedId={selectedId ?? null}
         onSelect={onSelect}
       />
+      {roads.map((r) => {
+        const positions = r.geometry.coordinates.map(
+          ([lng, lat]) => [lat, lng] as [number, number]
+        );
+        const color = ROAD_COLORS[r.category || "scenic"] || "#D4A843";
+        const active = selectedRoadId === r.id;
+        return (
+          <Polyline
+            key={r.id}
+            positions={positions}
+            pathOptions={{
+              color,
+              weight: active ? 6 : 4,
+              opacity: active ? 0.95 : 0.75,
+            }}
+            eventHandlers={{
+              click: () => onSelectRoad?.(r.id),
+            }}
+          >
+            <Popup>
+              <div style={{ minWidth: 200 }}>
+                <div style={{ fontFamily: "serif", fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
+                  {r.name}
+                </div>
+                <div style={{ fontFamily: "monospace", fontSize: 10, color: "#6b6056", marginBottom: 6 }}>
+                  {r.distanceMi} mi{r.drivenAt ? ` · ${new Date(r.drivenAt).getFullYear()}` : ""}
+                </div>
+                {r.drivenNote && (
+                  <div style={{ fontFamily: "serif", fontSize: 12, fontStyle: "italic", color: "#4a4036", borderLeft: "2px solid #D4A843", paddingLeft: 8, marginBottom: 6 }}>
+                    {r.drivenNote}
+                  </div>
+                )}
+                {onDeleteRoad && (
+                  <button
+                    onClick={() => onDeleteRoad(r.id)}
+                    style={{ fontFamily: "monospace", fontSize: 10, color: "#A63D40", textTransform: "uppercase", letterSpacing: 1, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </Popup>
+          </Polyline>
+        );
+      })}
       <PanToSelected experiences={validExps} selectedId={selectedId ?? null} />
       {onLongPress && <LongPressCatcher onFire={onLongPress} />}
     </MapContainer>

@@ -18,6 +18,8 @@ interface HomeDashboardProps {
   pairingsToday: number;
   marksToday: number;
   latestExperience: { name: string; location?: string | null } | null;
+  roadsCount: number;
+  roadsMiles: number;
 }
 
 export function HomeDashboard({
@@ -28,6 +30,8 @@ export function HomeDashboard({
   pairingsToday,
   marksToday,
   latestExperience,
+  roadsCount,
+  roadsMiles,
 }: HomeDashboardProps) {
   const hour = new Date().getHours();
   const greeting =
@@ -124,7 +128,7 @@ export function HomeDashboard({
           </Link>
         )}
 
-        {/* Cell 3: Path count + last place */}
+        {/* Cell 3: Path count + last place + roads */}
         <Link
           href="/map"
           className="bg-parchment p-6 hover:bg-earth/2 transition-colors group flex flex-col justify-between min-h-[180px]"
@@ -136,6 +140,13 @@ export function HomeDashboard({
             </p>
             <p className="font-mono text-xs text-earth/50 mt-1">
               {experienceCount === 1 ? "place" : "places"}
+              {roadsCount > 0 && (
+                <span className="text-earth/40">
+                  {" · "}
+                  {roadsMiles.toLocaleString()} mi on {roadsCount}{" "}
+                  {roadsCount === 1 ? "road" : "roads"}
+                </span>
+              )}
             </p>
             {latestExperience && (
               <p className="font-mono text-xs text-earth/60 mt-3 truncate">
@@ -144,7 +155,9 @@ export function HomeDashboard({
             )}
           </div>
           <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 group-hover:text-amber transition-colors">
-            {experienceCount === 0 ? "Log your first →" : "Open map →"}
+            {experienceCount === 0 && roadsCount === 0
+              ? "Log your first →"
+              : "Open map →"}
           </p>
         </Link>
       </div>

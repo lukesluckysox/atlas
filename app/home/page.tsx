@@ -31,6 +31,8 @@ export default async function HomePage() {
     pairingsToday,
     marksToday,
     latestExperience,
+    roadsCount,
+    roadsMiles,
   ] = await Promise.all([
     prisma.pairing.findMany({
       where: { userId: session.user.id },
@@ -60,6 +62,11 @@ export default async function HomePage() {
       orderBy: { createdAt: "desc" },
       select: { name: true, location: true },
     }),
+    prisma.highwayStretch.count({ where: { userId: session.user.id } }),
+    prisma.highwayStretch.aggregate({
+      where: { userId: session.user.id },
+      _sum: { distanceMi: true },
+    }),
   ]);
 
   return (
@@ -72,6 +79,8 @@ export default async function HomePage() {
         pairingsToday={pairingsToday}
         marksToday={marksToday}
         latestExperience={latestExperience}
+        roadsCount={roadsCount}
+        roadsMiles={Math.round(roadsMiles._sum.distanceMi ?? 0)}
       />
     </AppShell>
   );

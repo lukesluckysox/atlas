@@ -9,7 +9,7 @@ export default async function MapPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
-  const [experiences, geoMarks] = await Promise.all([
+  const [experiences, geoMarks, roads] = await Promise.all([
     prisma.experience.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -20,6 +20,10 @@ export default async function MapPage() {
         latitude: { not: null },
         longitude: { not: null },
       },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.highwayStretch.findMany({
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -59,6 +63,18 @@ export default async function MapPage() {
         experiences={merged}
         stats={stats}
         isPro={session.user.isPro}
+        roads={roads.map((r) => ({
+          id: r.id,
+          name: r.name,
+          ref: r.ref,
+          category: r.category,
+          startLabel: r.startLabel,
+          endLabel: r.endLabel,
+          distanceMi: r.distanceMi,
+          drivenAt: r.drivenAt ? r.drivenAt.toISOString() : null,
+          drivenNote: r.drivenNote,
+          geometry: r.geometry as { type: "LineString"; coordinates: [number, number][] },
+        }))}
       />
     </AppShell>
   );
