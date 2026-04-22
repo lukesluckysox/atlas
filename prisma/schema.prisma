@@ -86,23 +86,27 @@ model Pairing {
   location       String?
   latitude       Float?
   longitude      Float?
+  photoLum       Float?
+  photoWarmth    Float?
   createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id])
 }
 
 model Experience {
-  id        String    @id @default(cuid())
-  userId    String
-  type      String
-  name      String
-  location  String?
-  latitude  Float?
-  longitude Float?
-  date      DateTime?
-  note      String?
-  photoUrl  String?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id])
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  name        String
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  date        DateTime?
+  note        String?
+  photoUrl    String?
+  photoLum    Float?
+  photoWarmth Float?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
 }
 
 model Encounter {
@@ -128,12 +132,14 @@ model Portrait {
 }
 
 model Mark {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String
-  photoUrl  String?
-  latitude  Float?
-  longitude Float?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  id          String   @id @default(cuid())
+  userId      String
+  content     String
+  photoUrl    String?
+  latitude    Float?
+  longitude   Float?
+  photoLum    Float?
+  photoWarmth Float?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
 }

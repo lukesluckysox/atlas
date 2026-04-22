@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { content, photoUrl, latitude, longitude } = body;
+  const { content, photoUrl, latitude, longitude, photoLum, photoWarmth } = body;
 
   if (!content?.trim()) {
     return NextResponse.json({ error: "Content required" }, { status: 400 });
@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
       photoUrl,
       latitude,
       longitude,
+      photoLum: typeof photoLum === "number" ? photoLum : undefined,
+      photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
     },
   });
 

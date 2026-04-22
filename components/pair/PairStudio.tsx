@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
 import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
+import { sampleFileMood } from "@/lib/photo-mood";
 
 interface Track {
   id: string;
@@ -25,6 +26,7 @@ export function PairStudio({ isPro }: PairStudioProps) {
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [photoMood, setPhotoMood] = useState<{ lum: number; warmth: number } | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
@@ -41,6 +43,9 @@ export function PairStudio({ isPro }: PairStudioProps) {
   const handlePhotoSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Sample mood in parallel with upload — never blocks.
+    sampleFileMood(file).then((mood) => setPhotoMood(mood));
 
     const reader = new FileReader();
     reader.onload = async (ev) => {
@@ -136,6 +141,8 @@ export function PairStudio({ isPro }: PairStudioProps) {
           albumArt: selectedTrack.albumArt,
           note: note || undefined,
           location: location || undefined,
+          photoLum: photoMood?.lum,
+          photoWarmth: photoMood?.warmth,
         }),
       });
       if (!res.ok) throw new Error("Save failed");
@@ -214,6 +221,7 @@ export function PairStudio({ isPro }: PairStudioProps) {
                 onClick={() => {
                   setPhotoUrl(null);
                   setUploadedPhotoUrl(null);
+                  setPhotoMood(null);
                   setRecommendations([]);
                 }}
                 className="absolute top-3 right-3 bg-earth text-parchment p-1 hover:bg-earth-light"

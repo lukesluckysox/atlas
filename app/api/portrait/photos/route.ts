@@ -15,6 +15,8 @@ interface PhotoTile {
   kind: "pairing" | "experience" | "mark";
   label: string;
   createdAt: string;
+  lum: number | null;
+  warmth: number | null;
 }
 
 export async function GET() {
@@ -34,6 +36,8 @@ export async function GET() {
         trackName: true,
         artistName: true,
         createdAt: true,
+        photoLum: true,
+        photoWarmth: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -44,6 +48,8 @@ export async function GET() {
         photoUrl: true,
         name: true,
         createdAt: true,
+        photoLum: true,
+        photoWarmth: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -54,6 +60,8 @@ export async function GET() {
         photoUrl: true,
         content: true,
         createdAt: true,
+        photoLum: true,
+        photoWarmth: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -65,18 +73,24 @@ export async function GET() {
     trackName: string;
     artistName: string;
     createdAt: Date;
+    photoLum: number | null;
+    photoWarmth: number | null;
   }
   interface ExperienceRow {
     id: string;
     photoUrl: string | null;
     name: string;
     createdAt: Date;
+    photoLum: number | null;
+    photoWarmth: number | null;
   }
   interface MarkRow {
     id: string;
     photoUrl: string | null;
     content: string;
     createdAt: Date;
+    photoLum: number | null;
+    photoWarmth: number | null;
   }
 
   const tiles: PhotoTile[] = [
@@ -86,6 +100,8 @@ export async function GET() {
       kind: "pairing" as const,
       label: `${p.trackName} — ${p.artistName}`,
       createdAt: p.createdAt.toISOString(),
+      lum: p.photoLum,
+      warmth: p.photoWarmth,
     })),
     ...(experiences as ExperienceRow[])
       .filter((e) => e.photoUrl)
@@ -95,6 +111,8 @@ export async function GET() {
         kind: "experience" as const,
         label: e.name,
         createdAt: e.createdAt.toISOString(),
+        lum: e.photoLum,
+        warmth: e.photoWarmth,
       })),
     ...(marks as MarkRow[])
       .filter((m) => m.photoUrl)
@@ -104,6 +122,8 @@ export async function GET() {
         kind: "mark" as const,
         label: m.content.slice(0, 60),
         createdAt: m.createdAt.toISOString(),
+        lum: m.photoLum,
+        warmth: m.photoWarmth,
       })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 

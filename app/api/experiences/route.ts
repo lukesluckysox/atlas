@@ -41,7 +41,18 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { type, name, location, latitude, longitude, date, note, photoUrl } = body;
+  const {
+    type,
+    name,
+    location,
+    latitude,
+    longitude,
+    date,
+    note,
+    photoUrl,
+    photoLum,
+    photoWarmth,
+  } = body;
 
   if (!type || !name) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -58,6 +69,8 @@ export async function POST(req: NextRequest) {
       date: date ? new Date(date) : undefined,
       note,
       photoUrl,
+      photoLum: typeof photoLum === "number" ? photoLum : undefined,
+      photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
     },
   });
 

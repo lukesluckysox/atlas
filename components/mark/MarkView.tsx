@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { Camera, MapPin, X } from "lucide-react";
+import { sampleFileMood } from "@/lib/photo-mood";
 
 interface Mark {
   id: string;
@@ -19,6 +20,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const [content, setContent] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [photoMood, setPhotoMood] = useState<{ lum: number; warmth: number } | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,6 +46,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    sampleFileMood(file).then((mood) => setPhotoMood(mood));
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64 = ev.target?.result as string;
@@ -78,6 +81,8 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
           photoUrl: uploadedPhotoUrl ?? undefined,
           latitude: location?.lat,
           longitude: location?.lng,
+          photoLum: photoMood?.lum,
+          photoWarmth: photoMood?.warmth,
         }),
       });
       const mark = await res.json();
@@ -85,6 +90,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
       setContent("");
       setPhotoUrl(null);
       setUploadedPhotoUrl(null);
+      setPhotoMood(null);
       setLocation(null);
       setLocationLabel(null);
       textRef.current?.focus();

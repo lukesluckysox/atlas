@@ -24,7 +24,19 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { photoUrl, spotifyTrackId, trackName, artistName, albumArt, note, location, latitude, longitude } = body;
+  const {
+    photoUrl,
+    spotifyTrackId,
+    trackName,
+    artistName,
+    albumArt,
+    note,
+    location,
+    latitude,
+    longitude,
+    photoLum,
+    photoWarmth,
+  } = body;
 
   if (!photoUrl || !spotifyTrackId || !trackName || !artistName) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -42,6 +54,8 @@ export async function POST(req: NextRequest) {
       location,
       latitude,
       longitude,
+      photoLum: typeof photoLum === "number" ? photoLum : undefined,
+      photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
     },
   });
 
