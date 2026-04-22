@@ -256,8 +256,12 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   // Active autocomplete target: 'name' for non-concert, 'city' for concert
   const [activeField, setActiveField] = useState<"name" | "city">("name");
 
-  // Debounced place autocomplete — driven by either `name` or `city`
-  const query = form.type === "concert" ? form.city : form.name;
+  // Debounced place autocomplete — driven by either `name` or `city`.
+  // For state/country, we suppress name autocomplete: the user types the
+  // region freely, shading comes from our boundary lookup, and an optional
+  // city picker (rendered below) supplies the pin coords.
+  const nameSuggestsByType = form.type !== "state" && form.type !== "country";
+  const query = form.type === "concert" ? form.city : nameSuggestsByType ? form.name : "";
   useEffect(() => {
     if (suggestionsLocked.current) {
       suggestionsLocked.current = false;
@@ -317,8 +321,16 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   const handleSave = async () => {
     // Road: distinct save path — POST to /api/roads with start/end coords.
     if (form.type === "road") {
-      if (!form.roadStart || !form.roadEnd) {
-        toast.error("Pick a start and end city.");
+      if (!form.roadStart && !form.roadEnd) {
+        toast.error("Type a city, then pick one from the dropdown.");
+        return;
+      }
+      if (!form.roadStart) {
+        toast.error("Pick a start city from the dropdown.");
+        return;
+      }
+      if (!form.roadEnd) {
+        toast.error("Pick an end city from the dropdown.");
         return;
       }
       setSaving(true);
@@ -868,6 +880,7 @@ function LogPanel({
 }: LogPanelProps) {
   const isConcert = form.type === "concert";
   const isRoad = form.type === "road";
+  const isRegion = form.type === "state" || form.type === "country";
   const [showMore, setShowMore] = useState(false);
 
   // Auto-expand "More details" when an optional field already has content,
@@ -949,28 +962,36 @@ function LogPanel({
             <div className="relative">
               <input
                 type="text"
-                placeholder="Name * (start typing to search)"
+                placeholder={
+                  isRegion
+                    ? form.type === "state"
+                      ? "State / region name *"
+                      : "Country name *"
+                    : "Name * (start typing to search)"
+                }
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({
                     ...f,
                     name: e.target.value,
-                    latitude: null,
-                    longitude: null,
+                    // Region entries keep coords tied to their optional city picker —
+                    // don't clear them here.
+                    latitude: isRegion ? f.latitude : null,
+                    longitude: isRegion ? f.longitude : null,
                   }))
                 }
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 className="input-field pr-8"
                 autoComplete="off"
               />
-              {searching && (
+              {searching && !isRegion && (
                 <Search
                   size={14}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
                 />
               )}
             </div>
-            {showSuggestions && suggestions.length > 0 && (
+            {!isRegion && showSuggestions && suggestions.length > 0 && (
               <SuggestionsDropdown
                 suggestions={suggestions}
                 onPick={selectSuggestion}
@@ -985,6 +1006,36 @@ function LogPanel({
           onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
           className="input-field"
         />
+
+        {/* State/country: optional city picker. If picked, drops a pin at the city's
+            coordinates. If skipped, only the boundary polygon renders. */}
+        {isRegion && (
+          <RoadCityPicker
+            label="City (optional)"
+            value={
+              form.latitude != null && form.longitude != null
+                ? { label: form.location || "Selected city", lat: form.latitude, lng: form.longitude }
+                : null
+            }
+            onSelect={(v) => {
+              if (v) {
+                setForm((f) => ({
+                  ...f,
+                  location: v.label,
+                  latitude: v.lat,
+                  longitude: v.lng,
+                }));
+              } else {
+                setForm((f) => ({
+                  ...f,
+                  location: "",
+                  latitude: null,
+                  longitude: null,
+                }));
+              }
+            }}
+          />
+        )}
 
         {/* Road uses an inline note inside RoadFields; skip the shared extras block. */}
 
@@ -1024,8 +1075,22 @@ function LogPanel({
           </div>
         )}
 
-        {/* OPTIONAL fields — collapsed by default. Hidden for road (has its own note). */}
-        {!isRoad && <div className="border-t border-earth/10 pt-4">
+        {/* OPTIONAL fields — collapsed by default. Hidden for road (has its own note)
+            and for region types (they have their own city picker above and don't need
+            a free-text location). Notes still need a place — handled inline below. */}
+        {isRegion ? (
+          <div className="pt-2">
+            <textarea
+              placeholder="Note (optional)"
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              rows={2}
+              className="input-field resize-none"
+            />
+          </div>
+        ) : null}
+
+        {!isRoad && !isRegion && <div className="border-t border-earth/10 pt-4">
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
@@ -1255,6 +1320,9 @@ function RoadCityPicker({
       {loading && (
         <p className="font-mono text-[10px] text-earth/40 mt-1">Searching...</p>
       )}
+      {!loading && q.trim().length >= 2 && results.length === 0 && (
+        <p className="font-mono text-[10px] text-earth/40 mt-1">No matches. Try a different spelling.</p>
+      )}
       {results.length > 0 && (
         <div className="mt-1 border border-earth/10 bg-parchment divide-y divide-earth/5 max-h-40 overflow-y-auto">
           {results.map((r) => (
@@ -1263,8 +1331,9 @@ function RoadCityPicker({
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
+                const region = (r.location || "").split(",")[0]?.trim();
                 onSelect({
-                  label: r.location ? `${r.name}, ${r.location.split(",")[0]}` : r.name,
+                  label: region ? `${r.name}, ${region}` : r.name,
                   lat: r.latitude,
                   lng: r.longitude,
                 });
