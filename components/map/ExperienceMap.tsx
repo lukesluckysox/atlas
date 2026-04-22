@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { TraceMeta } from "@/components/ui/TraceMeta";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import {
   Plus,
@@ -20,8 +19,10 @@ import {
   Waves,
   Triangle,
   Landmark as LandmarkIcon,
+  Route,
   Trash2,
 } from "lucide-react";
+import { searchHighways, type HighwayOption } from "@/lib/highways";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -38,6 +39,7 @@ const EXPERIENCE_TYPES = [
   { value: "landmark", label: "Landmark", icon: LandmarkIcon, color: "#8B6F3F" },
   { value: "moment", label: "Moment", icon: MapPin, color: "#E8C47A" },
   { value: "notice", label: "Notice", icon: MapPin, color: "#C17F5A" },
+  { value: "road", label: "Road", icon: Route, color: "#D4A843" },
 ];
 
 // Two-tier filter groups — top row is the primary toggle, the fine-grained
@@ -60,6 +62,10 @@ const ROAD_SUBTYPES = [
   { value: "scenic", label: "Scenic", color: "#8B5A9F" },
 ];
 
+type BoundaryGeometry =
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+
 interface Experience {
   id: string;
   type: string;
@@ -69,6 +75,7 @@ interface Experience {
   longitude?: number | null;
   date?: Date | null;
   note?: string | null;
+  boundary?: BoundaryGeometry | null;
 }
 
 interface PlaceResult {
@@ -112,6 +119,10 @@ interface FormState {
   artist: string;
   venue: string;
   city: string;
+  // Road-only sub-fields
+  highway: HighwayOption | null;
+  roadStart: { label: string; lat: number; lng: number } | null;
+  roadEnd: { label: string; lat: number; lng: number } | null;
 }
 
 const INITIAL_FORM: FormState = {
@@ -125,6 +136,9 @@ const INITIAL_FORM: FormState = {
   artist: "",
   venue: "",
   city: "",
+  highway: null,
+  roadStart: null,
+  roadEnd: null,
 };
 
 const FILTER_STORAGE_KEY = "trace:map-filter";
@@ -301,6 +315,43 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   const resetForm = () => setForm(INITIAL_FORM);
 
   const handleSave = async () => {
+    // Road: distinct save path — POST to /api/roads with start/end coords.
+    if (form.type === "road") {
+      if (!form.roadStart || !form.roadEnd) {
+        toast.error("Pick a start and end city.");
+        return;
+      }
+      setSaving(true);
+      const result = await save.run(async () => {
+        const res = await fetch("/api/roads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.highway?.name,
+            category: form.highway?.category,
+            startLabel: form.roadStart!.label,
+            endLabel: form.roadEnd!.label,
+            startLat: form.roadStart!.lat,
+            startLng: form.roadStart!.lng,
+            endLat: form.roadEnd!.lat,
+            endLng: form.roadEnd!.lng,
+            drivenAt: form.date || undefined,
+            drivenNote: form.note || undefined,
+          }),
+        });
+        const data: { error?: string; distanceMi?: number; ref?: string } = await res.json();
+        if (!res.ok) throw new Error(data.error || "Save failed");
+        return data;
+      });
+      setSaving(false);
+      if (result && "distanceMi" in result) {
+        toast.success(`Traced. ${result.distanceMi} mi.`);
+        setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
+        router.refresh();
+      }
+      return;
+    }
+
     // Build the stored fields from concert sub-fields, or use name directly
     let name = form.name.trim();
     let location = form.location.trim();
@@ -402,10 +453,39 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
     }
   };
 
+  // Include entries with either coordinates OR a boundary polygon (states/countries
+  // sometimes come in boundary-only), and gate by active layer filter.
   const geoExperiences = experiences.filter(
-    (e) => e.latitude && e.longitude && isTypeActive(e.type)
+    (e) => ((e.latitude && e.longitude) || e.boundary) && isTypeActive(e.type)
   );
   const visibleExperiences = experiences.filter((e) => isTypeActive(e.type));
+
+  // Unified list rows: mix experiences + roads when the filter allows.
+  // Roads only appear when "road" is in the active type set (null = all).
+  type ListRow =
+    | { kind: "exp"; id: string; item: Experience; at: number }
+    | { kind: "road"; id: string; item: RoadStretch; at: number };
+
+  const roadRowsEligible = roadsVisible
+    ? roads.filter(
+        (r) => !activeRoadCats || activeRoadCats.has(r.category || "scenic")
+      )
+    : [];
+
+  const listRows: ListRow[] = [
+    ...visibleExperiences.map<ListRow>((e) => ({
+      kind: "exp",
+      id: e.id,
+      item: e,
+      at: e.date ? new Date(e.date).getTime() : 0,
+    })),
+    ...roadRowsEligible.map<ListRow>((r) => ({
+      kind: "road",
+      id: `road_${r.id}`,
+      item: r,
+      at: r.drivenAt ? new Date(r.drivenAt).getTime() : 0,
+    })),
+  ].sort((a, b) => b.at - a.at);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
@@ -556,12 +636,6 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
                     </button>
                   );
                 })}
-                <a
-                  href="/road"
-                  className="flex items-center gap-1.5 px-2 py-1 border border-earth/30 text-earth/70 hover:text-earth hover:border-earth font-mono text-[10px] uppercase tracking-widest"
-                >
-                  + Trace a road
-                </a>
               </div>
             )}
             {expandedGroup && expandedGroup !== "roads" && (
@@ -626,21 +700,69 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
                 <p className="label">Recent</p>
                 <p className="font-mono text-xs text-earth/30">
                   {activeTypes === null
-                    ? `${experiences.length} total`
-                    : `${visibleExperiences.length} of ${experiences.length}`}
+                    ? `${experiences.length + roads.length} total`
+                    : `${listRows.length} of ${experiences.length + roads.length}`}
                 </p>
               </div>
               <div className="flex-1 overflow-y-auto">
-                {visibleExperiences.length === 0 ? (
+                {listRows.length === 0 ? (
                   <div className="py-16 text-center px-6">
                     <p className="font-mono text-sm text-earth/40">
-                      {experiences.length === 0
+                      {experiences.length === 0 && roads.length === 0
                         ? "Nothing here yet. Go somewhere. Hear something."
                         : "No entries in the selected layers."}
                     </p>
                   </div>
                 ) : (
-                  visibleExperiences.slice(0, 12).map((exp) => {
+                  listRows.slice(0, 12).map((row) => {
+                    if (row.kind === "road") {
+                      const r = row.item;
+                      const isSelected = selectedRoadId === r.id;
+                      return (
+                        <div
+                          key={row.id}
+                          onClick={() => {
+                            setSelectedRoadId(isSelected ? null : r.id);
+                            setSelectedId(null);
+                          }}
+                          className={`group flex items-center gap-3 px-4 py-3 border-b border-earth/5 cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-amber/10 border-l-2 border-l-amber"
+                              : "hover:bg-earth/5"
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: "#D4A843" }} />
+                          <Route size={12} className="text-earth/40 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-mono text-sm text-earth truncate">{r.name}</p>
+                            <p className="font-mono text-xs text-earth/40 truncate">
+                              {r.distanceMi} mi · {r.startLabel} → {r.endLabel}
+                            </p>
+                          </div>
+                          {r.drivenAt && (
+                            <p className="font-mono text-xs text-earth/30 shrink-0">
+                              {format(new Date(r.drivenAt), "MMM yyyy")}
+                            </p>
+                          )}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm("Remove this stretch?")) return;
+                              const resp = await fetch(`/api/roads/${r.id}`, { method: "DELETE" });
+                              if (resp.ok) {
+                                toast.success("Removed.");
+                                router.refresh();
+                              } else toast.error("Failed to remove.");
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity"
+                            aria-label="Delete road"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    }
+                    const exp = row.item;
                     const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
                     const TypeIcon = typeMeta?.icon ?? MapPin;
                     const isSelected = selectedId === exp.id;
@@ -705,71 +827,6 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
         </div>
       </div>
 
-      {/* Full list below */}
-      {!showForm && visibleExperiences.length > 12 && (
-        <div className="mt-12">
-          <p className="label mb-4">All entries</p>
-          <div className="space-y-px">
-            {visibleExperiences.map((exp) => {
-              const typeMeta = EXPERIENCE_TYPES.find((t) => t.value === exp.type);
-              const TypeIcon = typeMeta?.icon ?? MapPin;
-              const isSelected = selectedId === exp.id;
-              const hasGeo = exp.latitude != null && exp.longitude != null;
-              return (
-                <div
-                  key={exp.id}
-                  ref={(el) => {
-                    rowRefs.current[exp.id] = el;
-                  }}
-                  onClick={() => {
-                    if (!hasGeo) return;
-                    setSelectedId(isSelected ? null : exp.id);
-                  }}
-                  className={`group flex items-center gap-6 py-4 border-b border-earth/5 transition-colors ${
-                    hasGeo ? "cursor-pointer" : ""
-                  } ${
-                    isSelected
-                      ? "bg-amber/10 border-l-2 border-l-amber pl-3"
-                      : hasGeo
-                      ? "hover:bg-earth/5"
-                      : ""
-                  }`}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: typeMeta?.color || "#D4A843" }}
-                  />
-                  <TypeIcon size={14} className="text-earth/40 shrink-0" />
-                  <div className="flex-[2] min-w-0">
-                    <p className="font-mono text-sm text-earth">{exp.name}</p>
-                  </div>
-                  <div className="flex-1 min-w-0 hidden sm:block">
-                    <p className="label text-xs">{typeMeta?.label}</p>
-                    <TraceMeta
-                      date={exp.date ?? undefined}
-                      location={exp.location ?? undefined}
-                      size="sm"
-                      className="mt-1"
-                    />
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(exp);
-                    }}
-                    disabled={deletingId === exp.id}
-                    className="opacity-0 group-hover:opacity-100 text-earth/40 hover:text-terracotta transition-opacity disabled:opacity-30"
-                    aria-label="Delete entry"
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -810,6 +867,7 @@ function LogPanel({
   onSave,
 }: LogPanelProps) {
   const isConcert = form.type === "concert";
+  const isRoad = form.type === "road";
   const [showMore, setShowMore] = useState(false);
 
   // Auto-expand "More details" when an optional field already has content,
@@ -875,7 +933,9 @@ function LogPanel({
         </div>
 
         {/* CORE fields — always visible. Keeps initiation to ~3 steps. */}
-        {isConcert ? (
+        {isRoad ? (
+          <RoadFields form={form} setForm={setForm} />
+        ) : isConcert ? (
           <input
             type="text"
             placeholder="Artist / band *"
@@ -926,6 +986,8 @@ function LogPanel({
           className="input-field"
         />
 
+        {/* Road uses an inline note inside RoadFields; skip the shared extras block. */}
+
         {/* Concert's "City" is how it geolocates, so we keep it visible. */}
         {isConcert && (
           <div className="relative">
@@ -962,8 +1024,8 @@ function LogPanel({
           </div>
         )}
 
-        {/* OPTIONAL fields — collapsed by default */}
-        <div className="border-t border-earth/10 pt-4">
+        {/* OPTIONAL fields — collapsed by default. Hidden for road (has its own note). */}
+        {!isRoad && <div className="border-t border-earth/10 pt-4">
           <button
             type="button"
             onClick={() => setShowMore((v) => !v)}
@@ -1005,9 +1067,9 @@ function LogPanel({
               />
             </div>
           )}
-        </div>
+        </div>}
 
-        {!isPro && (
+        {!isPro && (!isRoad) && (
           <p className="font-mono text-xs text-earth/40">
             Free tier: up to 50 experiences.
           </p>
@@ -1029,6 +1091,190 @@ function LogPanel({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Road fields: highway picker + start/end city pickers + note. Stays
+// inside the LogPanel so "Road" behaves like any other type, same drawer.
+function RoadFields({
+  form,
+  setForm,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+}) {
+  const [hwyQ, setHwyQ] = useState("");
+  const hwyOpts = form.highway ? [] : searchHighways(hwyQ, 6);
+  return (
+    <div className="space-y-3">
+      {/* Highway (optional) */}
+      <div>
+        <p className="label mb-2">Highway (optional)</p>
+        {form.highway ? (
+          <div className="flex items-center justify-between border border-earth/15 px-3 py-2 bg-parchment">
+            <span className="font-serif text-earth">{form.highway.name}</span>
+            <button
+              onClick={() => {
+                setForm((f) => ({ ...f, highway: null }));
+                setHwyQ("");
+              }}
+              className="font-mono text-[10px] text-earth/50 hover:text-earth"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={hwyQ}
+              onChange={(e) => setHwyQ(e.target.value)}
+              placeholder="I-90, PCH, Hana Highway..."
+              className="input-field"
+              autoComplete="off"
+            />
+            {hwyOpts.length > 0 && hwyQ.length > 0 && (
+              <div className="mt-1 border border-earth/10 bg-parchment divide-y divide-earth/5 max-h-40 overflow-y-auto">
+                {hwyOpts.map((h) => (
+                  <button
+                    key={h.ref}
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, highway: h }));
+                      setHwyQ(h.name);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-amber/10 flex items-baseline justify-between"
+                  >
+                    <span className="font-mono text-sm text-earth">{h.name}</span>
+                    <span className="font-mono text-[10px] text-earth/40 uppercase">
+                      {h.category.replace("_", " ")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Start + End */}
+      <RoadCityPicker
+        label="From *"
+        value={form.roadStart}
+        onSelect={(v) => setForm((f) => ({ ...f, roadStart: v }))}
+      />
+      <RoadCityPicker
+        label="To *"
+        value={form.roadEnd}
+        onSelect={(v) => setForm((f) => ({ ...f, roadEnd: v }))}
+      />
+
+      {/* Note (road-local; date lives in shared date field below) */}
+      <textarea
+        placeholder="A line (optional) — drove back from college, windows down..."
+        value={form.note}
+        onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+        rows={2}
+        className="input-field resize-none"
+      />
+    </div>
+  );
+}
+
+function RoadCityPicker({
+  label,
+  value,
+  onSelect,
+}: {
+  label: string;
+  value: { label: string; lat: number; lng: number } | null;
+  onSelect: (v: { label: string; lat: number; lng: number } | null) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  async function search(v: string) {
+    setQ(v);
+    if (v.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/places/search?q=${encodeURIComponent(v)}`);
+      if (r.ok) {
+        const raw = await r.json();
+        setResults(Array.isArray(raw) ? raw.slice(0, 5) : []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (value) {
+    return (
+      <div>
+        <p className="label mb-2">{label}</p>
+        <div className="flex items-center justify-between border border-earth/15 px-3 py-2 bg-parchment">
+          <span className="font-serif text-earth text-sm truncate">{value.label}</span>
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(null);
+              setQ("");
+              setResults([]);
+            }}
+            className="font-mono text-[10px] text-earth/50 hover:text-earth shrink-0 ml-2"
+          >
+            Change
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="label mb-2">{label}</p>
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => search(e.target.value)}
+        placeholder="City, town..."
+        className="input-field"
+        autoComplete="off"
+      />
+      {loading && (
+        <p className="font-mono text-[10px] text-earth/40 mt-1">Searching...</p>
+      )}
+      {results.length > 0 && (
+        <div className="mt-1 border border-earth/10 bg-parchment divide-y divide-earth/5 max-h-40 overflow-y-auto">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelect({
+                  label: r.location ? `${r.name}, ${r.location.split(",")[0]}` : r.name,
+                  lat: r.latitude,
+                  lng: r.longitude,
+                });
+                setQ("");
+                setResults([]);
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-amber/10"
+            >
+              <p className="font-mono text-sm text-earth">{r.name}</p>
+              {r.location && (
+                <p className="font-mono text-xs text-earth/50 truncate">{r.location}</p>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

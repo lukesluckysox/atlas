@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { lookupBoundary } from "@/lib/boundaries";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -58,6 +59,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // For state/country entries, resolve a boundary polygon at log time so the
+  // map can shade the region. Null is fine if we can't match the name.
+  const boundary = lookupBoundary(type, name);
+
   const experience = await prisma.experience.create({
     data: {
       userId: session.user.id,
@@ -71,6 +76,7 @@ export async function POST(req: NextRequest) {
       photoUrl,
       photoLum: typeof photoLum === "number" ? photoLum : undefined,
       photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
+      boundary: boundary ?? undefined,
     },
   });
 

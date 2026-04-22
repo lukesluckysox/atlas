@@ -106,6 +106,7 @@ model Experience {
   photoUrl    String?
   photoLum    Float?
   photoWarmth Float?
+  boundary    Json?
   createdAt   DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id])
 }

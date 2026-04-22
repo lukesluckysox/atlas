@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { ExperienceMap } from "@/components/map/ExperienceMap";
+import { lookupBoundary } from "@/lib/boundaries";
 
 export default async function MapPage() {
   const session = await getServerSession(authOptions);
@@ -28,6 +29,16 @@ export default async function MapPage() {
     }),
   ]);
 
+  // Backfill boundaries for state/country entries logged before the feature existed.
+  // Cheap: in-memory lookup from a static geojson. Only hydrates at read-time;
+  // doesn't persist, so new entries (via POST) are the source of truth.
+  const hydratedExperiences = experiences.map((e) => {
+    if (e.boundary) return e;
+    if (e.type !== "state" && e.type !== "country") return e;
+    const b = lookupBoundary(e.type, e.name);
+    return b ? { ...e, boundary: b } : e;
+  });
+
   // Fold geotagged notices into the same list as experiences so they render
   // as pins on the map. IDs are prefixed with `mark_` so the client can
   // route edits/deletes to /api/marks/[id] instead of /api/experiences/[id].
@@ -42,9 +53,14 @@ export default async function MapPage() {
     note: m.content,
   }));
 
-  const merged = [...experiences, ...noticesAsExperiences].sort(
+  const merged = [...hydratedExperiences, ...noticesAsExperiences].sort(
     (a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
   );
+
+  // Prisma types `boundary` as JsonValue; the client treats it as a narrower
+  // GeoJSON polygon shape. Cast at the boundary (pun intended) rather than
+  // proving it to TS repeatedly.
+  const mergedForClient = merged as unknown as Parameters<typeof ExperienceMap>[0]["experiences"];
 
   const stats = {
     total: experiences.length,
@@ -60,7 +76,7 @@ export default async function MapPage() {
   return (
     <AppShell>
       <ExperienceMap
-        experiences={merged}
+        experiences={mergedForClient}
         stats={stats}
         isPro={session.user.isPro}
         roads={roads.map((r) => ({

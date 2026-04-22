@@ -5,6 +5,7 @@ import {
   Marker,
   Popup,
   Polyline,
+  Polygon,
   useMap,
   useMapEvents,
   CircleMarker,
@@ -70,6 +71,10 @@ function iconForType(type: string, opts?: { selected?: boolean; faded?: boolean 
   });
 }
 
+type BoundaryGeometry =
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+
 interface Experience {
   id: string;
   name: string;
@@ -77,6 +82,7 @@ interface Experience {
   latitude?: number | null;
   longitude?: number | null;
   location?: string | null;
+  boundary?: BoundaryGeometry | null;
 }
 
 interface RoadStretch {
@@ -137,6 +143,31 @@ export default function MapView({
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
       />
+      {/* Border polygons for state/country entries — render first so pins + roads sit above */}
+      {experiences.flatMap((e) => {
+        if (!e.boundary) return [];
+        const key = `boundary-${e.id}`;
+        const pathOpts = {
+          color: "#D4A843",
+          weight: 1,
+          opacity: 0.9,
+          fillColor: "#D4A843",
+          fillOpacity: 0.15,
+        };
+        if (e.boundary.type === "Polygon") {
+          const rings = e.boundary.coordinates.map((ring) =>
+            ring.map(([lng, lat]) => [lat, lng] as [number, number])
+          );
+          return [<Polygon key={key} positions={rings} pathOptions={pathOpts} />];
+        }
+        // MultiPolygon — one <Polygon> per part
+        return e.boundary.coordinates.map((poly, i) => {
+          const rings = poly.map((ring) =>
+            ring.map(([lng, lat]) => [lat, lng] as [number, number])
+          );
+          return <Polygon key={`${key}-${i}`} positions={rings} pathOptions={pathOpts} />;
+        });
+      })}
       <ZoomAwareLayer
         experiences={validExps}
         onDelete={onDelete}
@@ -189,6 +220,7 @@ export default function MapView({
         );
       })}
       <PanToSelected experiences={validExps} selectedId={selectedId ?? null} />
+      <FitToRoad roads={roads} selectedRoadId={selectedRoadId ?? null} />
       {onLongPress && <LongPressCatcher onFire={onLongPress} />}
     </MapContainer>
   );
@@ -439,6 +471,35 @@ function PanToSelected({
     const targetZoom = Math.max(map.getZoom(), 10);
     map.flyTo([exp.latitude, exp.longitude], targetZoom, { duration: 0.6 });
   }, [selectedId, experiences, map]);
+  return null;
+}
+
+function FitToRoad({
+  roads,
+  selectedRoadId,
+}: {
+  roads: RoadStretch[];
+  selectedRoadId: string | null;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!selectedRoadId) return;
+    const r = roads.find((x) => x.id === selectedRoadId);
+    if (!r || !r.geometry?.coordinates?.length) return;
+    const coords = r.geometry.coordinates;
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const [lng, lat] of coords) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    if (!isFinite(minLat)) return;
+    map.flyToBounds(
+      [[minLat, minLng], [maxLat, maxLng]],
+      { padding: [40, 40], duration: 0.6, maxZoom: 10 }
+    );
+  }, [selectedRoadId, roads, map]);
   return null;
 }
 
