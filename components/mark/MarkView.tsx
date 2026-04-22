@@ -3,8 +3,10 @@ import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import Image from "next/image";
 import toast from "react-hot-toast";
-import { Camera, MapPin, X } from "lucide-react";
+import { Camera, MapPin, X, Pencil, Trash2, Check } from "lucide-react";
 import { sampleFileMood } from "@/lib/photo-mood";
+import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
+import { TraceMeta } from "@/components/ui/TraceMeta";
 
 interface Mark {
   id: string;
@@ -25,6 +27,10 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const save = useSaveState();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -72,7 +78,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const handleSave = async () => {
     if (!content.trim()) return;
     setSaving(true);
-    try {
+    const mark = await save.run(async () => {
       const res = await fetch("/api/marks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,7 +91,11 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
           photoWarmth: photoMood?.warmth,
         }),
       });
-      const mark = await res.json();
+      if (!res.ok) throw new Error("Save failed");
+      return res.json();
+    });
+    setSaving(false);
+    if (mark) {
       setMarks([mark, ...marks]);
       setContent("");
       setPhotoUrl(null);
@@ -94,10 +104,51 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
       setLocation(null);
       setLocationLabel(null);
       textRef.current?.focus();
-    } catch {
+    } else {
       toast.error("Could not save.");
+    }
+  };
+
+  const beginEdit = (mark: Mark) => {
+    setEditingId(mark.id);
+    setEditDraft(mark.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const commitEdit = async (id: string) => {
+    const body = editDraft.trim();
+    if (!body) return;
+    try {
+      const res = await fetch(`/api/marks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: body }),
+      });
+      if (!res.ok) throw new Error("update failed");
+      const updated: Mark = await res.json();
+      setMarks((ms) => ms.map((m) => (m.id === id ? { ...m, content: updated.content } : m)));
+      setEditingId(null);
+      setEditDraft("");
+    } catch {
+      toast.error("Could not update.");
+    }
+  };
+
+  const handleDelete = async (mark: Mark) => {
+    if (!confirm("Delete this notice?")) return;
+    setDeletingId(mark.id);
+    try {
+      const res = await fetch(`/api/marks/${mark.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+      setMarks((ms) => ms.filter((m) => m.id !== mark.id));
+    } catch {
+      toast.error("Could not delete.");
     } finally {
-      setSaving(false);
+      setDeletingId(null);
     }
   };
 
@@ -109,11 +160,16 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-12">
-        <p className="label mb-2">Notice</p>
-        <p className="font-mono text-xs text-earth/40">
-          What you noticed. One line, maybe a photo.
-        </p>
+      <div className="mb-12 flex items-start justify-between gap-4">
+        <div>
+          <p className="label mb-2">Notice</p>
+          <p className="font-mono text-xs text-earth/40">
+            What you noticed. One line, maybe a photo.
+          </p>
+        </div>
+        <div className="pt-1">
+          <SaveChip state={save.state} onRetry={save.retry} />
+        </div>
       </div>
 
       <div className="mb-16">
@@ -184,45 +240,100 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
       </div>
 
       <div className="space-y-0">
-        {marks.map((mark, i) => (
-          <div
-            key={mark.id}
-            className="py-6 border-b border-earth/5 animate-slide-up"
-            style={{ animationDelay: `${i * 30}ms` }}
-          >
-            <div className="flex items-start gap-6">
-              <div className="shrink-0 pt-1">
-                <p className="font-mono text-xs text-earth/30">
-                  {format(new Date(mark.createdAt), "MMM d")}
-                </p>
-                {mark.latitude && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <MapPin size={8} className="text-amber/50" />
-                    <span className="font-mono text-xs text-earth/20">
-                      {mark.latitude.toFixed(2)}, {mark.longitude?.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <p className="font-mono text-sm text-earth/80 leading-relaxed">
-                  {mark.content}
-                </p>
-                {mark.photoUrl && (
-                  <div className="mt-3">
-                    <Image
-                      src={mark.photoUrl}
-                      alt="Notice"
-                      width={240}
-                      height={180}
-                      className="object-cover"
-                    />
+        {marks.map((mark, i) => {
+          const isEditing = editingId === mark.id;
+          const isDeleting = deletingId === mark.id;
+          const locLabel = mark.latitude != null && mark.longitude != null
+            ? `${mark.latitude.toFixed(2)}, ${mark.longitude.toFixed(2)}`
+            : null;
+          return (
+            <div
+              key={mark.id}
+              className="group py-6 border-b border-earth/5 animate-slide-up"
+              style={{ animationDelay: `${i * 30}ms` }}
+            >
+              <div className="flex items-start gap-6">
+                <div className="shrink-0 pt-1 w-16">
+                  <p className="font-mono text-xs text-earth/30">
+                    {format(new Date(mark.createdAt), "MMM d")}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {isEditing ? (
+                    <div>
+                      <textarea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        rows={2}
+                        className="w-full bg-transparent border-b border-earth/30 font-mono text-sm text-earth focus:outline-none focus:border-earth resize-none"
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-3 mt-2">
+                        <button
+                          onClick={() => commitEdit(mark.id)}
+                          disabled={!editDraft.trim()}
+                          className="flex items-center gap-1 font-mono text-xs text-amber hover:text-earth disabled:opacity-40 transition-colors"
+                        >
+                          <Check size={12} /> Save
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="font-mono text-xs text-earth/40 hover:text-earth transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="font-mono text-sm text-earth/80 leading-relaxed">
+                        {mark.content}
+                      </p>
+                      {mark.photoUrl && (
+                        <div className="mt-3">
+                          <Image
+                            src={mark.photoUrl}
+                            alt="Notice"
+                            width={240}
+                            height={180}
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="mt-2">
+                        <TraceMeta
+                          date={mark.createdAt}
+                          location={locLabel}
+                          tags={["notice"]}
+                          size="sm"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                {!isEditing && (
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={() => beginEdit(mark)}
+                      className="text-earth/40 hover:text-earth transition-colors"
+                      aria-label="Edit"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(mark)}
+                      disabled={isDeleting}
+                      className="text-earth/40 hover:text-terracotta transition-colors disabled:opacity-40"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {marks.length === 0 && (
           <p className="font-mono text-xs text-earth/30 py-8">

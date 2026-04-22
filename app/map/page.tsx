@@ -9,10 +9,38 @@ export default async function MapPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
-  const experiences = await prisma.experience.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-  });
+  const [experiences, geoMarks] = await Promise.all([
+    prisma.experience.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.mark.findMany({
+      where: {
+        userId: session.user.id,
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  // Fold geotagged notices into the same list as experiences so they render
+  // as pins on the map. IDs are prefixed with `mark_` so the client can
+  // route edits/deletes to /api/marks/[id] instead of /api/experiences/[id].
+  const noticesAsExperiences = geoMarks.map((m) => ({
+    id: `mark_${m.id}`,
+    type: "notice",
+    name: m.content.length > 60 ? `${m.content.slice(0, 60)}…` : m.content,
+    location: null,
+    latitude: m.latitude,
+    longitude: m.longitude,
+    date: m.createdAt,
+    note: m.content,
+  }));
+
+  const merged = [...experiences, ...noticesAsExperiences].sort(
+    (a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
+  );
 
   const stats = {
     total: experiences.length,
@@ -28,7 +56,7 @@ export default async function MapPage() {
   return (
     <AppShell>
       <ExperienceMap
-        experiences={experiences}
+        experiences={merged}
         stats={stats}
         isPro={session.user.isPro}
       />

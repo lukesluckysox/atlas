@@ -26,6 +26,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   beach: "#3E7A8C",
   peak: "#6B6B6B",
   landmark: "#8B6F3F",
+  notice: "#C17F5A",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -40,6 +41,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   beach: "Beach",
   peak: "Peak",
   landmark: "Landmark",
+  notice: "Notice",
 };
 
 // Categories kept visible at mid zoom. Everything else fades to tiny pips.
@@ -81,11 +83,13 @@ export default function MapView({
   onDelete,
   selectedId,
   onSelect,
+  onLongPress,
 }: {
   experiences: Experience[];
   onDelete?: (id: string) => void;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  onLongPress?: (lat: number, lng: number) => void;
 }) {
   const validExps = experiences.filter((e) => e.latitude && e.longitude);
   const center: [number, number] =
@@ -111,6 +115,7 @@ export default function MapView({
         onSelect={onSelect}
       />
       <PanToSelected experiences={validExps} selectedId={selectedId ?? null} />
+      {onLongPress && <LongPressCatcher onFire={onLongPress} />}
     </MapContainer>
   );
 }
@@ -273,6 +278,72 @@ function ExperienceMarker({
       </Popup>
     </Marker>
   );
+}
+
+/**
+ * Long-press / right-click catcher. Leaflet fires `contextmenu` for both
+ * right-click on desktop and long-press on touch devices (its tap handler
+ * promotes a sustained touch into a contextmenu event). We also implement
+ * a manual touch-hold fallback so it works even when Leaflet's tap shim is
+ * disabled on pinch-zoom gestures.
+ */
+function LongPressCatcher({ onFire }: { onFire: (lat: number, lng: number) => void }) {
+  const map = useMap();
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+
+  useMapEvents({
+    contextmenu: (e) => {
+      // Prevent browser's default right-click menu
+      (e.originalEvent as MouseEvent).preventDefault();
+      onFire(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  // Touch-hold fallback (~550ms, <12px movement)
+  useEffect(() => {
+    const container = map.getContainer();
+    const onTouchStart = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      startPt.current = { x: t.clientX, y: t.clientY };
+      holdTimer.current = setTimeout(() => {
+        if (!startPt.current) return;
+        const rect = container.getBoundingClientRect();
+        const x = startPt.current.x - rect.left;
+        const y = startPt.current.y - rect.top;
+        const latlng = map.containerPointToLatLng([x, y]);
+        onFire(latlng.lat, latlng.lng);
+        startPt.current = null;
+      }, 550);
+    };
+    const cancel = (ev?: TouchEvent) => {
+      if (ev && ev.touches.length === 1 && startPt.current) {
+        const t = ev.touches[0];
+        const dx = t.clientX - startPt.current.x;
+        const dy = t.clientY - startPt.current.y;
+        if (dx * dx + dy * dy < 144) return; // <12px movement — keep timer
+      }
+      if (holdTimer.current) {
+        clearTimeout(holdTimer.current);
+        holdTimer.current = null;
+      }
+      startPt.current = null;
+    };
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", cancel, { passive: true });
+    container.addEventListener("touchend", cancel as EventListener);
+    container.addEventListener("touchcancel", cancel as EventListener);
+    return () => {
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", cancel);
+      container.removeEventListener("touchend", cancel as EventListener);
+      container.removeEventListener("touchcancel", cancel as EventListener);
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    };
+  }, [map, onFire]);
+
+  return null;
 }
 
 /**

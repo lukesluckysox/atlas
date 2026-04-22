@@ -112,6 +112,92 @@ function clamp01(n: number): number {
 }
 
 /**
+ * Aggregate "shape of your year" reading. Given all analyzed moods,
+ * returns a short headline + detail line based on the centroid and spread.
+ *
+ * Centroid sector → headline (borrowed from the same sun-path metaphor).
+ * Spread (stdev) → detail adjective ("varied", "narrow", etc).
+ */
+export interface MoodNarration {
+  headline: string;
+  detail: string;
+  centroid: PhotoMood;
+  sampleSize: number;
+}
+
+export function narrateMoods(moods: PhotoMood[]): MoodNarration | null {
+  if (moods.length === 0) return null;
+
+  const n = moods.length;
+  const mLum = moods.reduce((s, m) => s + m.lum, 0) / n;
+  const mWarm = moods.reduce((s, m) => s + m.warmth, 0) / n;
+
+  let vLum = 0;
+  let vWarm = 0;
+  for (const m of moods) {
+    vLum += (m.lum - mLum) ** 2;
+    vWarm += (m.warmth - mWarm) ** 2;
+  }
+  const sdLum = Math.sqrt(vLum / n);
+  const sdWarm = Math.sqrt(vWarm / n);
+  // Average spread across both axes, roughly [0, ~0.35]
+  const spread = (sdLum + sdWarm) / 2;
+
+  // Sector headline — by centroid.
+  const sectorReading = moodReading({ lum: mLum, warmth: mWarm });
+  const sector = sectorReading.split(" · ")[0];
+
+  let headline: string;
+  switch (sector) {
+    case "golden hour":
+      headline = "Your year leans golden hour.";
+      break;
+    case "noon":
+      headline = "Bright days, cool light.";
+      break;
+    case "overhead":
+      headline = "Overhead sun, high contrast.";
+      break;
+    case "ember":
+      headline = "Late light, warm embers.";
+      break;
+    case "midnight":
+      headline = "Mostly midnights and cool dark.";
+      break;
+    case "shadow":
+      headline = "Low-key, shadowed.";
+      break;
+    case "lamplight":
+      headline = "Warm interiors, lamplight.";
+      break;
+    case "overcast":
+      headline = "Cool and overcast.";
+      break;
+    default:
+      headline = "Balanced light, balanced year.";
+  }
+
+  // Spread descriptor.
+  let detail: string;
+  if (n < 4) {
+    detail = `Reading ${n} photo${n === 1 ? "" : "s"}.`;
+  } else if (spread < 0.08) {
+    detail = "A narrow palette — your look is consistent.";
+  } else if (spread < 0.16) {
+    detail = "Varied, but centered.";
+  } else {
+    detail = "Wide range — you move through many moods.";
+  }
+
+  return {
+    headline,
+    detail,
+    centroid: { lum: mLum, warmth: mWarm },
+    sampleSize: n,
+  };
+}
+
+/**
  * Human-readable reading of a (lum, warmth) pair for hover tooltips.
  * Matches the 3x3 sectors around center (0.5, 0.5).
  */

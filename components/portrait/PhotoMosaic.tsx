@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Camera, Compass, Sparkles, Fingerprint as FingerprintIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { sampleUrlMood, moodReading } from "@/lib/photo-mood";
+import { sampleUrlMood, moodReading, narrateMoods } from "@/lib/photo-mood";
 
 /**
  * Portrait photomosaic with three interchangeable shape modes:
@@ -297,9 +297,39 @@ function CompassMode({
   onHover: (t: Tile | null) => void;
 }) {
   const positioned = useMemo(() => moodFieldLayout(tiles), [tiles]);
+  const narration = useMemo(() => {
+    const moods = tiles
+      .filter((t) => t.lum != null && t.warmth != null)
+      .map((t) => ({ lum: t.lum as number, warmth: t.warmth as number }));
+    return narrateMoods(moods);
+  }, [tiles]);
+
+  // Density grid for the heat wash — bucket sampled moods into a 7x7
+  // grid and render each cell's density as a faint radial blob. Reveals
+  // the "weather" shape even before you read individual tiles.
+  const heat = useMemo(() => buildHeat(tiles), [tiles]);
+
+  const centroidXY = narration
+    ? {
+        x: 10 + narration.centroid.warmth * 80,
+        y: 10 + (1 - narration.centroid.lum) * 80,
+      }
+    : null;
+
   return (
-    <div className="relative mx-auto" style={{ aspectRatio: "1 / 1", maxWidth: 640 }}>
-      <MoodFieldGuides />
+    <div className="relative">
+      {narration && (
+        <div className="mb-3 text-center">
+          <p className="font-serif text-lg text-earth leading-tight">
+            {narration.headline}
+          </p>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40 mt-1">
+            {narration.detail} · {narration.sampleSize} photo{narration.sampleSize === 1 ? "" : "s"} read
+          </p>
+        </div>
+      )}
+      <div className="relative mx-auto" style={{ aspectRatio: "1 / 1", maxWidth: 640 }}>
+        <MoodFieldGuides heat={heat} />
 
       {positioned.map((p) => (
         <TileImg
@@ -330,14 +360,14 @@ function CompassMode({
         </span>
       ))}
       {[
-        { text: "golden hour", x: 88, y: 8, align: "right" as const },
-        { text: "noon", x: 12, y: 8, align: "left" as const },
-        { text: "ember", x: 88, y: 92, align: "right" as const },
-        { text: "midnight", x: 12, y: 92, align: "left" as const },
+        { text: "golden hour", x: 86, y: 7 },
+        { text: "noon", x: 14, y: 7 },
+        { text: "ember", x: 86, y: 93 },
+        { text: "midnight", x: 14, y: 93 },
       ].map((c) => (
         <span
           key={c.text}
-          className="absolute font-mono text-[9px] uppercase tracking-wider text-earth/30 pointer-events-none"
+          className="absolute font-mono text-[10px] uppercase tracking-[0.12em] text-earth/45 pointer-events-none hidden sm:inline"
           style={{
             left: `${c.x}%`,
             top: `${c.y}%`,
@@ -347,11 +377,33 @@ function CompassMode({
           {c.text}
         </span>
       ))}
+
+      {/* Centroid marker — a small ring at the mean mood. */}
+      {centroidXY && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: `${centroidXY.x}%`,
+            top: `${centroidXY.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+          title="Centroid of your mood field"
+        >
+          <div className="w-4 h-4 rounded-full border border-amber/60 animate-pulse" />
+        </div>
+      )}
+      </div>
     </div>
   );
 }
 
-function MoodFieldGuides() {
+interface HeatCell {
+  xPct: number;
+  yPct: number;
+  intensity: number; // 0..1 normalized within the field
+}
+
+function MoodFieldGuides({ heat }: { heat: HeatCell[] }) {
   // Warm-to-cool horizontal gradient (E warm → W cool) with a light-to-dark
   // vertical wash (N bright → S dark) at low opacity. Parchment-safe.
   return (
@@ -370,11 +422,33 @@ function MoodFieldGuides() {
             "linear-gradient(to bottom, rgba(245,240,232,0.35), rgba(0,0,0,0) 40%, rgba(44,24,16,0.10))",
         }}
       />
+
+      {/* Density heat blobs: where many photos share a mood, parchment
+          pools amber underneath. Sits above the gradient wash but below
+          the grid lines and tiles. */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
       >
+        <defs>
+          <radialGradient id="mood-heat" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#D4A843" stopOpacity="0.55" />
+            <stop offset="60%" stopColor="#D4A843" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#D4A843" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {heat.map((h, i) => (
+          <circle
+            key={i}
+            cx={h.xPct}
+            cy={h.yPct}
+            // Larger radius at higher intensity; clamp so single-photo cells stay small.
+            r={4 + h.intensity * 11}
+            fill="url(#mood-heat)"
+            opacity={0.35 + h.intensity * 0.5}
+          />
+        ))}
         {/* Crosshairs (true cardinal lines) */}
         <line x1="50" y1="8" x2="50" y2="92" stroke="currentColor" strokeWidth="0.12" className="text-earth/15" strokeDasharray="0.6 0.8" />
         <line x1="8" y1="50" x2="92" y2="50" stroke="currentColor" strokeWidth="0.12" className="text-earth/15" strokeDasharray="0.6 0.8" />
@@ -383,6 +457,41 @@ function MoodFieldGuides() {
       </svg>
     </>
   );
+}
+
+/**
+ * Bucket analyzed moods into a GRID x GRID lattice, keep only non-empty cells,
+ * normalize counts to [0, 1] so the most-populated cell is full-intensity.
+ * The heat blobs use radial gradients so cells visually bleed into each other.
+ */
+function buildHeat(tiles: Tile[]): HeatCell[] {
+  const GRID = 7;
+  const MARGIN = 10;
+  const SPAN = 100 - MARGIN * 2;
+
+  const counts = new Map<string, number>();
+  for (const t of tiles) {
+    if (t.lum == null || t.warmth == null) continue;
+    const gx = Math.min(GRID - 1, Math.floor(t.warmth * GRID));
+    const gy = Math.min(GRID - 1, Math.floor((1 - t.lum) * GRID));
+    const key = `${gx},${gy}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size === 0) return [];
+
+  const max = Math.max(...Array.from(counts.values()));
+  const cells: HeatCell[] = [];
+  for (const [key, count] of Array.from(counts.entries())) {
+    const [gxStr, gyStr] = key.split(",");
+    const gx = Number(gxStr);
+    const gy = Number(gyStr);
+    cells.push({
+      xPct: MARGIN + ((gx + 0.5) / GRID) * SPAN,
+      yPct: MARGIN + ((gy + 0.5) / GRID) * SPAN,
+      intensity: count / max,
+    });
+  }
+  return cells;
 }
 
 /**

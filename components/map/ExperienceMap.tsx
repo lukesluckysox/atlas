@@ -37,6 +37,7 @@ const EXPERIENCE_TYPES = [
   { value: "peak", label: "Peak", icon: Triangle, color: "#6B6B6B" },
   { value: "landmark", label: "Landmark", icon: LandmarkIcon, color: "#8B6F3F" },
   { value: "moment", label: "Moment", icon: MapPin, color: "#E8C47A" },
+  { value: "notice", label: "Notice", icon: MapPin, color: "#C17F5A" },
 ];
 
 interface Experience {
@@ -279,8 +280,12 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
   const handleDelete = async (exp: Experience) => {
     if (!confirm(`Delete "${exp.name}"? This can't be undone.`)) return;
     setDeletingId(exp.id);
+    // Notices are stored as Marks; route their delete accordingly.
+    const isNotice = exp.id.startsWith("mark_");
+    const rawId = isNotice ? exp.id.slice(5) : exp.id;
+    const url = isNotice ? `/api/marks/${rawId}` : `/api/experiences/${rawId}`;
     try {
-      const res = await fetch(`/api/experiences/${exp.id}`, { method: "DELETE" });
+      const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) {
         const data: { error?: string } = await res.json().catch(() => ({}));
         throw new Error(data.error || "Could not delete.");
@@ -292,6 +297,35 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
       toast.error(msg);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Long-press / right-click the map: drop a pin, open drawer pre-filled.
+  const handleLongPress = async (lat: number, lng: number) => {
+    const rLat = Number(lat.toFixed(6));
+    const rLng = Number(lng.toFixed(6));
+    // Open drawer immediately with coords — location string fills in async.
+    setForm({
+      ...INITIAL_FORM,
+      type: "moment",
+      latitude: rLat,
+      longitude: rLng,
+      location: `${rLat}, ${rLng}`,
+    });
+    setShowForm(true);
+    toast.success("Pin dropped. Finish the log.");
+    try {
+      const res = await fetch(`/api/places/reverse?lat=${rLat}&lng=${rLng}`);
+      if (!res.ok) return;
+      const data: { label?: string | null } = await res.json();
+      if (data.label) {
+        setForm((f) =>
+          // Only overwrite if user hasn't started editing location.
+          f.location === `${rLat}, ${rLng}` ? { ...f, location: data.label! } : f
+        );
+      }
+    } catch {
+      /* swallow — coords remain as fallback */
     }
   };
 
@@ -346,6 +380,7 @@ export function ExperienceMap({ experiences, stats, isPro }: Props) {
                 const exp = experiences.find((e) => e.id === id);
                 if (exp) void handleDelete(exp);
               }}
+              onLongPress={handleLongPress}
             />
           </div>
 
@@ -648,7 +683,7 @@ function LogPanel({
         <div>
           <p className="label mb-3">Type</p>
           <div className="grid grid-cols-2 gap-2">
-            {EXPERIENCE_TYPES.map((type) => (
+            {EXPERIENCE_TYPES.filter((t) => t.value !== "notice").map((type) => (
               <button
                 key={type.value}
                 onClick={() =>
