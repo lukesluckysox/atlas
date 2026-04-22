@@ -85,35 +85,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Coordinates required" }, { status: 400 });
   }
 
+  // Try Mapbox Directions for the real road geometry. If the token is missing
+  // or the call fails, fall back to a straight-line so the entry still saves.
   const token = process.env.MAPBOX_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: "Server missing MAPBOX_TOKEN" },
-      { status: 500 }
-    );
-  }
+  let geometry: { type: "LineString"; coordinates: [number, number][] } = {
+    type: "LineString",
+    coordinates: [[startLng, startLat], [endLng, endLat]],
+  };
+  let parsedRef: string | null = null;
+  // Haversine fallback for distance (miles).
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 3958.7613;
+  const dLat = toRad(endLat - startLat);
+  const dLng = toRad(endLng - startLng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(startLat)) * Math.cos(toRad(endLat)) * Math.sin(dLng / 2) ** 2;
+  let distanceMi = 2 * R * Math.asin(Math.sqrt(a));
+  let usedFallback = !token;
 
-  const coordStr = `${startLng},${startLat};${endLng},${endLat}`;
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordStr}?geometries=geojson&overview=full&steps=false&access_token=${token}`;
-
-  const r = await fetch(url);
-  if (!r.ok) {
-    return NextResponse.json(
-      { error: `Mapbox ${r.status}` },
-      { status: 502 }
-    );
+  if (token) {
+    const coordStr = `${startLng},${startLat};${endLng},${endLat}`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordStr}?geometries=geojson&overview=full&steps=false&access_token=${token}`;
+    try {
+      const r = await fetch(url);
+      if (r.ok) {
+        const data = (await r.json()) as { routes?: MapboxRoute[]; code?: string };
+        if (data.routes?.length) {
+          const route = data.routes[0];
+          geometry = route.geometry;
+          parsedRef = parseRefFromSummary(route.legs?.[0]?.summary);
+          distanceMi = route.distance / 1609.344;
+        } else {
+          usedFallback = true;
+        }
+      } else {
+        console.error("[roads] mapbox non-200:", r.status);
+        usedFallback = true;
+      }
+    } catch (err) {
+      console.error("[roads] mapbox fetch failed:", err);
+      usedFallback = true;
+    }
   }
-  const data = (await r.json()) as { routes?: MapboxRoute[]; code?: string };
-  if (!data.routes?.length) {
-    return NextResponse.json(
-      { error: "No route found between those points" },
-      { status: 422 }
-    );
-  }
-
-  const route = data.routes[0];
-  const parsedRef = parseRefFromSummary(route.legs?.[0]?.summary);
-  const distanceMi = route.distance / 1609.344;
 
   // Prefer user-supplied name, fall back to parsed summary
   const finalName = name?.trim() || (parsedRef ? `${parsedRef}: ${startLabel} → ${endLabel}` : `${startLabel} → ${endLabel}`);
@@ -132,12 +146,12 @@ export async function POST(req: NextRequest) {
       startLng,
       endLat,
       endLng,
-      geometry: route.geometry as unknown as object,
+      geometry: geometry as unknown as object,
       distanceMi: Math.round(distanceMi * 10) / 10,
       drivenAt: drivenAt ? new Date(drivenAt) : null,
       drivenNote: drivenNote?.trim() || null,
     },
   });
 
-  return NextResponse.json(stretch);
+  return NextResponse.json({ ...stretch, usedFallback });
 }

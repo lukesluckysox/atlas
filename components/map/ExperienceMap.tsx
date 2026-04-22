@@ -334,6 +334,7 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
         return;
       }
       setSaving(true);
+      let thrownMsg: string | null = null;
       const result = await save.run(async () => {
         const res = await fetch("/api/roads", {
           method: "POST",
@@ -351,15 +352,25 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
             drivenNote: form.note || undefined,
           }),
         });
-        const data: { error?: string; distanceMi?: number; ref?: string } = await res.json();
-        if (!res.ok) throw new Error(data.error || "Save failed");
+        const data: { error?: string; distanceMi?: number; ref?: string; usedFallback?: boolean } = await res.json();
+        if (!res.ok) {
+          thrownMsg = data.error || `Save failed (${res.status})`;
+          throw new Error(thrownMsg);
+        }
         return data;
       });
       setSaving(false);
       if (result && "distanceMi" in result) {
-        toast.success(`Traced. ${result.distanceMi} mi.`);
+        const r = result as { distanceMi: number; usedFallback?: boolean };
+        toast.success(
+          r.usedFallback
+            ? `Traced (straight line, ${r.distanceMi} mi). Add MAPBOX_TOKEN for real routing.`
+            : `Traced. ${r.distanceMi} mi.`
+        );
         setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
         router.refresh();
+      } else {
+        toast.error(thrownMsg || "Couldn’t save road. Check connection.");
       }
       return;
     }
