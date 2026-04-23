@@ -572,6 +572,15 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
               experiences={geoExperiences}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              draftMarker={
+                form.latitude != null && form.longitude != null && !selectedId
+                  ? {
+                      lat: form.latitude,
+                      lng: form.longitude,
+                      label: form.name || form.venue || form.location || "New",
+                    }
+                  : null
+              }
               onDelete={(id) => {
                 const exp = experiences.find((e) => e.id === id);
                 if (exp) void handleDelete(exp);
@@ -962,6 +971,8 @@ function LogPanel({
               artist: r.headliner ?? f.artist,
               location: r.city ?? f.location,
               date: r.date ?? f.date,
+              latitude: r.lat ?? f.latitude,
+              longitude: r.lng ?? f.longitude,
               note: r.imageUrl
                 ? (f.note ? f.note + "\n\n" : "") + "(from ticket)"
                 : f.note,

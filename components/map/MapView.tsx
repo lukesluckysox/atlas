@@ -115,6 +115,7 @@ export default function MapView({
   selectedRoadId,
   onSelectRoad,
   onDeleteRoad,
+  draftMarker,
 }: {
   experiences: Experience[];
   onDelete?: (id: string) => void;
@@ -125,6 +126,7 @@ export default function MapView({
   selectedRoadId?: string | null;
   onSelectRoad?: (id: string | null) => void;
   onDeleteRoad?: (id: string) => void;
+  draftMarker?: { lat: number; lng: number; label?: string } | null;
 }) {
   const validExps = experiences.filter((e) => e.latitude && e.longitude);
   const center: [number, number] =
@@ -221,6 +223,7 @@ export default function MapView({
       })}
       <PanToSelected experiences={validExps} selectedId={selectedId ?? null} />
       <FitToRoad roads={roads} selectedRoadId={selectedRoadId ?? null} />
+      {draftMarker && <DraftPin marker={draftMarker} />}
       {onLongPress && <LongPressCatcher onFire={onLongPress} />}
     </MapContainer>
   );
@@ -450,6 +453,43 @@ function LongPressCatcher({ onFire }: { onFire: (lat: number, lng: number) => vo
   }, [map, onFire]);
 
   return null;
+}
+
+/**
+ * Draft pin — rendered while the user is drafting a Path (e.g. after a
+ * ticket upload auto-geocodes). Pulses amber so it's obvious it's unsaved.
+ * Flies the map to it the moment it appears or moves.
+ */
+function DraftPin({
+  marker,
+}: {
+  marker: { lat: number; lng: number; label?: string };
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const targetZoom = Math.max(map.getZoom(), 12);
+    map.flyTo([marker.lat, marker.lng], targetZoom, { duration: 0.8 });
+  }, [marker.lat, marker.lng, map]);
+
+  const icon = L.divIcon({
+    html: `<div style="position:relative;width:20px;height:20px;">
+      <div style="position:absolute;inset:0;background:#D4A843;border-radius:50%;border:3px solid #2C1810;box-shadow:0 0 0 6px rgba(212,168,67,0.3),0 2px 6px rgba(0,0,0,0.35);animation:pulse 1.6s ease-in-out infinite;"></div>
+    </div>
+    <style>@keyframes pulse{0%,100%{box-shadow:0 0 0 6px rgba(212,168,67,0.3),0 2px 6px rgba(0,0,0,0.35)}50%{box-shadow:0 0 0 14px rgba(212,168,67,0),0 2px 6px rgba(0,0,0,0.35)}}</style>`,
+    className: "",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+
+  return (
+    <Marker position={[marker.lat, marker.lng]} icon={icon}>
+      {marker.label && (
+        <Tooltip direction="top" offset={[0, -8]} permanent>
+          {marker.label}
+        </Tooltip>
+      )}
+    </Marker>
+  );
 }
 
 /**

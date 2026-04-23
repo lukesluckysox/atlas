@@ -15,6 +15,9 @@ type Extracted = {
   headliner: string | null;
   type: "Concert" | "Stadium" | "Landmark" | "Restaurant" | "Other" | null;
   confidence: "high" | "medium" | "low";
+  lat: number | null;
+  lng: number | null;
+  resolvedPlace: string | null;
   imageUrl: string;
 };
 
@@ -67,11 +70,12 @@ export function ShareToTrace({ onApply }: Props) {
       }
       const data = await res.json();
       // Show everything Claude returned so we can see what's happening
-      toast(
-        `venue=${data.venue ?? "—"} | date=${data.date ?? "—"} | conf=${data.confidence ?? "—"}`,
-        { duration: 8000 }
-      );
       setPreview({ ...data, imageUrl: url });
+      if (data.lat != null && data.lng != null) {
+        toast.success(`pinned: ${data.venue ?? data.resolvedPlace ?? "location"}`);
+      } else if (data.venue || data.city) {
+        toast("couldn't place it on the map — pin manually", { icon: "⚠", duration: 6000 });
+      }
       if (data.confidence === "low") {
         toast("low confidence — double-check the fields", { icon: "⚠", duration: 6000 });
       }
