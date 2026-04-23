@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
-import { RefreshCw, Compass } from "lucide-react";
+import { RefreshCw, Compass, Share2 } from "lucide-react";
 import { PhotoMosaic } from "./PhotoMosaic";
 import { MusicTree } from "./MusicTree";
+import { ShareDialog } from "./ShareDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Portrait {
@@ -30,6 +31,7 @@ interface Props {
 export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
   const [portrait, setPortrait] = useState<Portrait | null>(initialPortrait);
   const [generating, setGenerating] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const hasEnoughData =
     dataCount.pairingCount >= 3 ||
@@ -90,16 +92,30 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
         h1="What Trace sees."
         tagline="Light, sound, and distance, read back from your traces."
         right={
-          <button
-            onClick={generate}
-            disabled={generating}
-            className="flex items-center gap-2 btn-secondary text-sm disabled:opacity-40"
-          >
-            <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
-            {portrait ? "Regenerate" : "Generate portrait"}
-          </button>
+          <div className="flex items-center gap-2">
+            {portrait && (
+              <button
+                onClick={() => setSharing(true)}
+                className="flex items-center gap-2 btn-secondary text-sm"
+                title="Share portrait as image"
+              >
+                <Share2 size={12} />
+                Share
+              </button>
+            )}
+            <button
+              onClick={generate}
+              disabled={generating}
+              className="flex items-center gap-2 btn-secondary text-sm disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
+              {portrait ? "Regenerate" : "Generate portrait"}
+            </button>
+          </div>
         }
       />
+
+      <ShareDialog open={sharing} onClose={() => setSharing(false)} />
 
       {portrait ? (
         <div className="space-y-12">
