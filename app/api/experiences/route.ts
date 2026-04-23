@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { lookupBoundary } from "@/lib/boundaries";
+import { fetchWeather } from "@/lib/weather";
+import { makeShareSlug } from "@/lib/share";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -63,6 +65,10 @@ export async function POST(req: NextRequest) {
   // map can shade the region. Null is fine if we can't match the name.
   const boundary = lookupBoundary(type, name);
 
+  // Passive weather + moon for the date of the experience (or now if undated).
+  const weatherAt = date ? new Date(date) : new Date();
+  const weather = await fetchWeather(latitude, longitude, weatherAt);
+
   const experience = await prisma.experience.create({
     data: {
       userId: session.user.id,
@@ -77,6 +83,11 @@ export async function POST(req: NextRequest) {
       photoLum: typeof photoLum === "number" ? photoLum : undefined,
       photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
       boundary: boundary ?? undefined,
+      weatherTemp: weather.weatherTemp,
+      weatherCode: weather.weatherCode,
+      weatherLabel: weather.weatherLabel,
+      moonPhase: weather.moonPhase,
+      shareSlug: makeShareSlug(),
     },
   });
 

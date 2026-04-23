@@ -50,6 +50,8 @@ export interface Trace {
   photoUrl: string | null;
   /** Stable link into the app for this trace. */
   href: string;
+  /** Opaque share slug for public /s/<kind>/<slug> link. Null if not shareable. */
+  shareSlug: string | null;
 }
 
 // ─── Photo-mood helper ─────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ export function pairingToTrace(p: {
   photoLum: number | null;
   photoWarmth: number | null;
   createdAt: Date;
+  shareSlug?: string | null;
 }): Trace {
   return {
     id: p.id,
@@ -95,6 +98,7 @@ export function pairingToTrace(p: {
     read: p.captionDismissed ? null : p.caption,
     photoUrl: p.photoUrl,
     href: `/explore?open=${p.id}`,
+    shareSlug: p.shareSlug ?? null,
   };
 }
 
@@ -111,6 +115,7 @@ export function experienceToTrace(e: {
   photoLum: number | null;
   photoWarmth: number | null;
   createdAt: Date;
+  shareSlug?: string | null;
 }): Trace {
   return {
     id: e.id,
@@ -123,6 +128,7 @@ export function experienceToTrace(e: {
     read: null,
     photoUrl: e.photoUrl,
     href: `/map?focus=${e.id}`,
+    shareSlug: e.shareSlug ?? null,
   };
 }
 
@@ -137,6 +143,7 @@ export function markToTrace(m: {
   photoLum: number | null;
   photoWarmth: number | null;
   createdAt: Date;
+  shareSlug?: string | null;
 }): Trace {
   return {
     id: m.id,
@@ -157,6 +164,7 @@ export function markToTrace(m: {
     read: m.keyword ?? m.summary ?? null,
     photoUrl: m.photoUrl,
     href: `/mark#${m.id}`,
+    shareSlug: m.shareSlug ?? null,
   };
 }
 
@@ -166,6 +174,7 @@ export function encounterToTrace(e: {
   answer: string | null;
   landed: boolean | null;
   date: Date;
+  shareSlug?: string | null;
 }): Trace {
   return {
     id: e.id,
@@ -178,6 +187,8 @@ export function encounterToTrace(e: {
     read: e.landed === true ? "landed" : e.landed === false ? "passed" : null,
     photoUrl: null,
     href: `/encounter#${e.id}`,
+    // Encounters only shareable when the user answered; UI enforces.
+    shareSlug: e.answer && e.shareSlug ? e.shareSlug : null,
   };
 }
 

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateDailyQuestion, pickEncounterEcho } from "@/lib/anthropic";
+import { makeShareSlug } from "@/lib/share";
 
 /**
  * Returns the current 12-hour encounter question for the user. Each global
@@ -77,6 +78,7 @@ export async function GET(_req: NextRequest) {
         userId: session.user.id,
         question,
         echoOfId: echoOfId ?? null,
+        shareSlug: makeShareSlug(),
       },
     });
   }

@@ -492,3 +492,90 @@ Max 3 citations. If you can't answer from the data, return {"answer": "Not enoug
     return { answer: "Couldn't reach the model just now. Try again in a moment.", citations: [] };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Ticket / poster OCR — "Share to Trace".
+// Given an image URL (ticket stub, concert poster, event flyer), extract the
+// fields needed to prefill a Path save: venue, city, date, headliner, type.
+// Returns nulls on any failure; the user can always hand-edit.
+// ---------------------------------------------------------------------------
+
+export interface TicketRead {
+  venue: string | null;
+  city: string | null;
+  date: string | null; // ISO-ish YYYY-MM-DD when legible
+  headliner: string | null;
+  type: "Concert" | "Stadium" | "Landmark" | "Restaurant" | "Other" | null;
+  confidence: "high" | "medium" | "low";
+}
+
+export async function readTicket(imageUrl: string): Promise<TicketRead> {
+  const empty: TicketRead = {
+    venue: null,
+    city: null,
+    date: null,
+    headliner: null,
+    type: null,
+    confidence: "low",
+  };
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 300,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "url", url: imageUrl } },
+            {
+              type: "text",
+              text: `You are reading a ticket stub, concert poster, or event flyer.
+Extract only fields that appear on the image. Do not invent details.
+
+Return JSON only, matching this shape exactly:
+{
+  "venue": string or null,
+  "city": string or null,
+  "date": "YYYY-MM-DD" or null,
+  "headliner": string or null,
+  "type": "Concert" | "Stadium" | "Landmark" | "Restaurant" | "Other" | null,
+  "confidence": "high" | "medium" | "low"
+}
+
+Rules:
+- "type" should be "Concert" for music events, "Stadium" for sports, "Restaurant" for dining, "Landmark" for attractions. Otherwise "Other".
+- "date" must be YYYY-MM-DD or null. If only month+day visible and the year is unclear, return null.
+- If the image isn't a ticket/poster, return all nulls and confidence "low".
+- Do not include any text outside the JSON object.`,
+            },
+          ],
+        },
+      ],
+    });
+    const c = response.content[0];
+    if (c.type !== "text") return empty;
+    const match = c.text.match(/\{[\s\S]*\}/);
+    if (!match) return empty;
+    const parsed = JSON.parse(match[0]) as TicketRead;
+    return {
+      venue: typeof parsed.venue === "string" ? parsed.venue : null,
+      city: typeof parsed.city === "string" ? parsed.city : null,
+      date: typeof parsed.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
+      headliner: typeof parsed.headliner === "string" ? parsed.headliner : null,
+      type:
+        parsed.type === "Concert" ||
+        parsed.type === "Stadium" ||
+        parsed.type === "Landmark" ||
+        parsed.type === "Restaurant" ||
+        parsed.type === "Other"
+          ? parsed.type
+          : null,
+      confidence:
+        parsed.confidence === "high" || parsed.confidence === "medium" || parsed.confidence === "low"
+          ? parsed.confidence
+          : "low",
+    };
+  } catch {
+    return empty;
+  }
+}

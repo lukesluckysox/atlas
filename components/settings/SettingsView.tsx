@@ -1,6 +1,7 @@
 "use client";
-import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import { Check } from "lucide-react";
@@ -33,22 +34,21 @@ export function SettingsView({ user }: { user: User }) {
     }
   };
 
-  const handleExport = async () => {
+  const router = useRouter();
+  const [resettingTour, setResettingTour] = useState(false);
+
+  const resetOnboarding = async () => {
+    if (resettingTour) return;
+    setResettingTour(true);
     try {
-      const [pairings, experiences, marks] = await Promise.all([
-        fetch("/api/pairings").then((r) => r.json()),
-        fetch("/api/experiences").then((r) => r.json()),
-        fetch("/api/marks").then((r) => r.json()),
-      ]);
-      const data = { pairings, experiences, marks, exportedAt: new Date().toISOString() };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "atlas-export.json";
-      a.click();
+      const res = await fetch("/api/user/onboarding", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("tour reset");
+      router.push("/home");
     } catch {
-      toast.error("Export failed.");
+      toast.error("couldn't reset tour");
+    } finally {
+      setResettingTour(false);
     }
   };
 
@@ -121,14 +121,25 @@ export function SettingsView({ user }: { user: User }) {
 
         <section>
           <p className="label mb-6">Data</p>
-          <div className="space-y-4">
-            <button
-              onClick={handleExport}
-              className="btn-secondary w-full"
-            >
-              Export all data (JSON)
-            </button>
+          <div className="space-y-3">
+            <Link href="/settings/export" className="btn-secondary w-full block text-center">
+              Export &amp; download
+            </Link>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
+              JSON backup or printable record — your copy to keep.
+            </p>
           </div>
+        </section>
+
+        <section>
+          <p className="label mb-6">Tour</p>
+          <button
+            onClick={resetOnboarding}
+            disabled={resettingTour}
+            className="font-mono text-sm text-earth/40 hover:text-earth transition-colors disabled:opacity-50"
+          >
+            {resettingTour ? "…" : "Show the intro again"}
+          </button>
         </section>
 
         <section>

@@ -3,6 +3,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
 import { FreshMoment } from "@/components/home/FreshMoment";
+import { OnThisDay } from "@/components/home/OnThisDay";
+import { SmartCapture } from "@/components/home/SmartCapture";
 
 interface HomeDashboardProps {
   recentPairings: Array<{
@@ -53,6 +55,17 @@ export function HomeDashboard({
       {/* Fresh signal: the most recent trace, as a single line. Makes Home
           feel like it changed since yesterday. Hides itself on empty. */}
       <FreshMoment />
+
+      {/* Single-input capture that infers kind. Works for the 80% case
+          without forcing the user to pick a capture type first. */}
+      <div className="mb-8">
+        <SmartCapture />
+      </div>
+
+      {/* Traces from prior years on this calendar day. Silent if empty. */}
+      <div className="mb-10">
+        <OnThisDay />
+      </div>
 
       {/* Today-strip: three cells, each one action. Instant legibility. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-earth/10 mb-16">

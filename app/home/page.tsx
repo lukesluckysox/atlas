@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
+import OnboardingGate from "@/components/onboarding/OnboardingGate";
 
 // Align with /api/encounter — two 12-hour windows a day, UTC-anchored.
 function currentWindowStart(): Date {
@@ -71,6 +72,7 @@ export default async function HomePage() {
 
   return (
     <AppShell>
+      <OnboardingGate />
       <HomeDashboard
         recentPairings={recentPairings}
         experienceCount={experienceCount}

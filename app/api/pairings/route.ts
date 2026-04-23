@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { captionPairing } from "@/lib/anthropic";
 import { spotifyApi } from "@/lib/spotify-user";
+import { fetchWeather } from "@/lib/weather";
+import { makeShareSlug } from "@/lib/share";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -73,8 +75,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "photoUrl or albumArt required" }, { status: 400 });
   }
 
-  // Fetch genres (for the music tree) — always. Caption only when not quick.
-  const [genres, caption] = await Promise.all([
+  // Fetch genres (music tree), caption (if full capture), weather (passive).
+  // All three race; any failure returns null/[] and the save still lands.
+  const [genres, caption, weather] = await Promise.all([
     resolveGenres(session.user.id, spotifyTrackId),
     isQuick
       ? Promise.resolve(null)
@@ -85,6 +88,7 @@ export async function POST(req: NextRequest) {
           note: note ?? null,
           location: location ?? null,
         }),
+    fetchWeather(latitude, longitude),
   ]);
 
   const pairing = await prisma.pairing.create({
@@ -103,6 +107,11 @@ export async function POST(req: NextRequest) {
       longitude,
       photoLum: typeof photoLum === "number" ? photoLum : undefined,
       photoWarmth: typeof photoWarmth === "number" ? photoWarmth : undefined,
+      weatherTemp: weather.weatherTemp,
+      weatherCode: weather.weatherCode,
+      weatherLabel: weather.weatherLabel,
+      moonPhase: weather.moonPhase,
+      shareSlug: makeShareSlug(),
     },
   });
 

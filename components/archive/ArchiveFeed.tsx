@@ -10,7 +10,7 @@ import { AddToCollection } from "@/components/collections/AddToCollection";
 // ─── Types ────────────────────────────────────────────────────────────────
 
 type KindFilter = "all" | TraceKind;
-type TimeFilter = "all" | "week" | "month" | "year";
+type TimeFilter = "all" | "week" | "month" | "year" | "custom";
 
 interface Counts {
   tracks: number;
@@ -61,7 +61,7 @@ const KIND_META: Record<
   TraceKind,
   { label: string; Icon: typeof Music2 }
 > = {
-  tracks: { label: "Tracks", Icon: Music2 },
+  tracks: { label: "Track", Icon: Music2 },
   path: { label: "Path", Icon: MapPin },
   notice: { label: "Moment", Icon: Eye },
   encounter: { label: "Encounter", Icon: HelpCircle },
@@ -178,6 +178,8 @@ function FilterChip({
 export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [time, setTime] = useState<TimeFilter>("all");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounced(query, 250);
 
@@ -201,8 +203,20 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
   const buildUrl = (before: string | null): string => {
     const params = new URLSearchParams();
     if (kind !== "all") params.set("kind", kind);
-    const since = sinceFor(time);
-    if (since) params.set("since", since);
+    if (time === "custom") {
+      if (customStart) params.set("since", new Date(customStart).toISOString());
+      // Use end-of-day for customEnd so the whole day is included. The
+      // `before` query param on the API is strictly less-than, so we pass
+      // the start of the *next* day.
+      if (customEnd) {
+        const endOfDay = new Date(customEnd);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        params.set("before", endOfDay.toISOString());
+      }
+    } else {
+      const since = sinceFor(time);
+      if (since) params.set("since", since);
+    }
     if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     if (before) params.set("before", before);
     params.set("take", "50");
@@ -241,7 +255,7 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, time, debouncedQuery]);
+  }, [kind, time, customStart, customEnd, debouncedQuery]);
 
   // Load the next page using the cursor. Appends to existing list.
   const loadMore = async () => {
@@ -339,7 +353,7 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
             onClick={() => setKind("notice")}
             count={kind === "all" ? counts.notice : undefined}
           >
-            Notice
+            Moment
           </FilterChip>
           <FilterChip
             active={kind === "encounter"}
@@ -364,7 +378,45 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
           <FilterChip active={time === "all"} onClick={() => setTime("all")}>
             All time
           </FilterChip>
+          <FilterChip active={time === "custom"} onClick={() => setTime("custom")}>
+            Custom
+          </FilterChip>
         </div>
+
+        {/* Custom range: two date inputs, only shown when Custom is active. */}
+        {time === "custom" && (
+          <div className="flex flex-wrap items-center gap-3 border border-earth/15 p-3">
+            <label className="font-mono text-[10px] uppercase tracking-widest text-earth/50">
+              From
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="ml-2 font-mono text-xs text-earth bg-transparent border-b border-earth/30 px-1 py-1 focus:outline-none focus:border-earth"
+              />
+            </label>
+            <label className="font-mono text-[10px] uppercase tracking-widest text-earth/50">
+              To
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="ml-2 font-mono text-xs text-earth bg-transparent border-b border-earth/30 px-1 py-1 focus:outline-none focus:border-earth"
+              />
+            </label>
+            {(customStart || customEnd) && (
+              <button
+                onClick={() => {
+                  setCustomStart("");
+                  setCustomEnd("");
+                }}
+                className="font-mono text-[10px] uppercase tracking-widest text-earth/50 hover:text-earth"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Results */}

@@ -33,6 +33,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { searchHighways, type HighwayOption } from "@/lib/highways";
+import { ShareToTrace } from "@/components/map/ShareToTrace";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MapPrintButton } from "@/components/map/MapPrintButton";
 
@@ -938,6 +939,35 @@ function LogPanel({
             <X size={14} />
           </button>
         </div>
+      </div>
+
+      {/* Share to Trace: upload a ticket/poster, prefill the form below */}
+      <div className="px-6 pt-5">
+        <ShareToTrace
+          onApply={(r) => {
+            // Map OCR type to the form's type enum. "Concert" → concert, etc.
+            const typeMap: Record<string, string> = {
+              Concert: "concert",
+              Stadium: "stadium",
+              Restaurant: "restaurant",
+              Landmark: "landmark",
+              Other: "city",
+            };
+            setForm((f) => ({
+              ...f,
+              type: (r.type && typeMap[r.type]) || f.type,
+              name: r.headliner ?? r.venue ?? f.name,
+              venue: r.venue ?? f.venue,
+              city: r.city ?? f.city,
+              artist: r.headliner ?? f.artist,
+              location: r.city ?? f.location,
+              date: r.date ?? f.date,
+              note: r.imageUrl
+                ? (f.note ? f.note + "\n\n" : "") + "(from ticket)"
+                : f.note,
+            }));
+          }}
+        />
       </div>
 
       <div className="p-6 space-y-5">

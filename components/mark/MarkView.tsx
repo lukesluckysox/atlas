@@ -9,6 +9,7 @@ import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { TraceMeta } from "@/components/ui/TraceMeta";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { VoiceMemo } from "@/components/mark/VoiceMemo";
 
 interface Mark {
   id: string;
@@ -293,6 +294,11 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
               <MapPin size={14} />
               {locationLabel ?? "Location"}
             </button>
+            <VoiceMemo
+              onTranscript={(text) => {
+                setContent((c) => (c ? c.trimEnd() + " " + text : text));
+              }}
+            />
           </div>
           <div className="flex items-center gap-4">
             <span className="font-mono text-xs text-earth/20">⌘↵</span>

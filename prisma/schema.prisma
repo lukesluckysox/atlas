@@ -15,6 +15,7 @@ model User {
   image        String?
   isPro        Boolean      @default(false)
   stripeId     String?
+  onboardedAt  DateTime?
   createdAt    DateTime     @default(now())
   pairings     Pairing[]
   experiences  Experience[]
@@ -124,26 +125,41 @@ model Pairing {
   longitude        Float?
   photoLum         Float?
   photoWarmth      Float?
+  weatherTemp      Float?
+  weatherCode      Int?
+  weatherLabel     String?
+  moonPhase        Float?
+  shareSlug        String?  @unique
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 model Experience {
-  id          String    @id @default(cuid())
-  userId      String
-  type        String
-  name        String
-  location    String?
-  latitude    Float?
-  longitude   Float?
-  date        DateTime?
-  note        String?
-  photoUrl    String?
-  photoLum    Float?
-  photoWarmth Float?
-  boundary    Json?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id])
+  id           String    @id @default(cuid())
+  userId       String
+  type         String
+  name         String
+  location     String?
+  latitude     Float?
+  longitude    Float?
+  date         DateTime?
+  note         String?
+  photoUrl     String?
+  photoLum     Float?
+  photoWarmth  Float?
+  boundary     Json?
+  weatherTemp  Float?
+  weatherCode  Int?
+  weatherLabel String?
+  moonPhase    Float?
+  shareSlug    String?   @unique
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, createdAt])
 }
 
 model Encounter {
@@ -159,8 +175,11 @@ model Encounter {
   // Set once on creation by the AI; stable thereafter. Not a FK — soft ref
   // so deletes don't cascade.
   echoOfId    String?
+  shareSlug   String?  @unique
   date        DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
 }
 
 model Portrait {
@@ -176,18 +195,26 @@ model Portrait {
 }
 
 model Mark {
-  id          String   @id @default(cuid())
-  userId      String
-  content     String
-  summary     String?
-  keyword     String?
-  photoUrl    String?
-  latitude    Float?
-  longitude   Float?
-  photoLum    Float?
-  photoWarmth Float?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  userId       String
+  content      String
+  summary      String?
+  keyword      String?
+  photoUrl     String?
+  audioUrl     String?
+  latitude     Float?
+  longitude    Float?
+  photoLum     Float?
+  photoWarmth  Float?
+  weatherTemp  Float?
+  weatherCode  Int?
+  weatherLabel String?
+  moonPhase    Float?
+  shareSlug    String?  @unique
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 model HighwayStretch {
