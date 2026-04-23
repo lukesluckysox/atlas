@@ -17,9 +17,10 @@ import { drainQueue } from "@/lib/offline-submit";
  *   1. Register the service worker (if supported)
  *   2. Listen to online/offline + visibilitychange and drain the queue
  *   3. Render a small pill in the top-right when items are pending
+ *   4. Pre-warm core routes so they load offline after first visit
  *
- * Intentionally scope-narrow: the SW does NOT cache pages. Reads still
- * require network; only writes queue.
+ * The SW caches the app shell + visited HTML + Next static assets, so the
+ * app opens without network once installed. Fresh data still needs network.
  */
 export function OfflineProvider() {
   const [count, setCount] = useState(0);
@@ -105,6 +106,19 @@ export function OfflineProvider() {
             /* ignore */
           }
         }
+        // Pre-warm core routes into the SW HTML cache so they work offline
+        // after first visit. Fire-and-forget, idle callback to avoid jank.
+        const prewarm = () => {
+          const routes = ["/home", "/mark", "/pair", "/map", "/encounter", "/offline"];
+          routes.forEach((r) => {
+            fetch(r, { credentials: "same-origin" }).catch(() => {});
+          });
+        };
+        const idle = (window as unknown as {
+          requestIdleCallback?: (cb: () => void) => number;
+        }).requestIdleCallback;
+        if (typeof idle === "function") idle(prewarm);
+        else setTimeout(prewarm, 2500);
       })
       .catch(() => {
         /* SW disabled or blocked — non-fatal */
