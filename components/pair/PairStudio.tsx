@@ -285,11 +285,11 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
               Archive →
             </Link>
           </div>
-          <div className="flex gap-px">
-            {ribbonItems.map((p) => (
+          <div className="inline-flex gap-px w-fit">
+            {ribbonItems.filter((p) => !!p.photoUrl).map((p) => (
               <div
                 key={p.id}
-                className={`relative w-20 h-20 bg-earth/5 overflow-hidden shrink-0 ${
+                className={`relative w-20 h-20 overflow-hidden shrink-0 ${
                   p.fresh ? "ring-2 ring-amber animate-fade-in" : ""
                 }`}
               >
