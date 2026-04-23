@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
 import { Search, Music2, MapPin, Eye, HelpCircle } from "lucide-react";
 import type { Trace, TraceKind } from "@/lib/trace";
+import { AddToCollection } from "@/components/collections/AddToCollection";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -66,14 +67,21 @@ const KIND_META: Record<
   encounter: { label: "Encounter", Icon: HelpCircle },
 };
 
-function TraceCard({ trace }: { trace: Trace }) {
+function TraceCard({ trace, isPro }: { trace: Trace; isPro: boolean }) {
   const { Icon, label } = KIND_META[trace.kind];
 
   return (
     <Link
       href={trace.href}
-      className="block border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group"
+      className="block border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group relative"
     >
+      {/* AddToCollection lives inside the Link — it stops propagation so
+          clicks on the icon don't trigger the card navigation. */}
+      {isPro && (
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <AddToCollection kind={trace.kind} refId={trace.id} isPro={isPro} />
+        </div>
+      )}
       <div className="flex">
         {/* Photo strip (if any) */}
         {trace.photoUrl && (
@@ -167,7 +175,7 @@ function FilterChip({
 
 // ─── Main feed ────────────────────────────────────────────────────────────
 
-export function ArchiveFeed() {
+export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [time, setTime] = useState<TimeFilter>("all");
   const [query, setQuery] = useState("");
@@ -385,7 +393,7 @@ export function ArchiveFeed() {
               </p>
               <div className="space-y-2">
                 {items.map((t) => (
-                  <TraceCard key={`${t.kind}-${t.id}`} trace={t} />
+                  <TraceCard key={`${t.kind}-${t.id}`} trace={t} isPro={isPro} />
                 ))}
               </div>
             </section>

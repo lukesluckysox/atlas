@@ -9,11 +9,13 @@ import { StreakBadge } from "@/components/layout/StreakBadge";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home" },
+  { href: "/capture", label: "Capture" },
   { href: "/pair", label: "Tracks" },
   { href: "/map", label: "Path" },
   { href: "/encounter", label: "Encounter" },
   { href: "/mark", label: "Notice" },
   { href: "/archive", label: "Archive" },
+  { href: "/collections", label: "Collections" },
   { href: "/portrait", label: "Portrait" },
 ];
 

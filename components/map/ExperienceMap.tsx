@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { searchHighways, type HighwayOption } from "@/lib/highways";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { MapPrintButton } from "@/components/map/MapPrintButton";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -528,16 +529,19 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
         h1="Where you&rsquo;ve been."
         tagline="Countries, parks, concerts, trails, roads. A map of what it was."
         right={
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus size={14} />
-            Log
-          </button>
+          <div className="flex items-center gap-2">
+            <MapPrintButton isPro={isPro} />
+            <button
+              onClick={() => {
+                resetForm();
+                setShowForm(true);
+              }}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus size={14} />
+              Log
+            </button>
+          </div>
         }
       />
 

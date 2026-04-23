@@ -57,29 +57,40 @@ export async function POST(req: NextRequest) {
     longitude,
     photoLum,
     photoWarmth,
+    quick,
   } = body;
 
-  if (!photoUrl || !spotifyTrackId || !trackName || !artistName) {
+  if (!spotifyTrackId || !trackName || !artistName) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Fetch genres (for the music tree) in parallel with caption generation.
-  // Both fail graceful — pairing saves either way.
+  // Quick-capture mode: no photo required. Falls back to album art as the
+  // visual. Skips caption generation (no real photo to speak to). Used by
+  // mobile instant capture.
+  const isQuick = !!quick;
+  const resolvedPhoto = photoUrl || (isQuick ? albumArt ?? null : null);
+  if (!resolvedPhoto) {
+    return NextResponse.json({ error: "photoUrl or albumArt required" }, { status: 400 });
+  }
+
+  // Fetch genres (for the music tree) — always. Caption only when not quick.
   const [genres, caption] = await Promise.all([
     resolveGenres(session.user.id, spotifyTrackId),
-    captionPairing({
-      photoUrl,
-      trackName,
-      artistName,
-      note: note ?? null,
-      location: location ?? null,
-    }),
+    isQuick
+      ? Promise.resolve(null)
+      : captionPairing({
+          photoUrl: resolvedPhoto,
+          trackName,
+          artistName,
+          note: note ?? null,
+          location: location ?? null,
+        }),
   ]);
 
   const pairing = await prisma.pairing.create({
     data: {
       userId: session.user.id,
-      photoUrl,
+      photoUrl: resolvedPhoto,
       spotifyTrackId,
       trackName,
       artistName,

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ArchiveFeed } from "@/components/archive/ArchiveFeed";
@@ -15,6 +16,12 @@ export default async function ArchivePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
 
+  // Re-read isPro so the AddToCollection affordance respects current Pro status.
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { isPro: true },
+  });
+
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto px-6 py-12 animate-page-in">
@@ -23,7 +30,7 @@ export default async function ArchivePage() {
           h1="Everything you've traced."
           tagline="Tracks, paths, notices, encounters. One timeline."
         />
-        <ArchiveFeed />
+        <ArchiveFeed isPro={!!user?.isPro} />
       </div>
     </AppShell>
   );
