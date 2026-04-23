@@ -2,7 +2,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { format } from "date-fns";
-import { MapPin, X } from "lucide-react";
+import { MapPin, X, RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 import { useEffect, useMemo, useState } from "react";
 
 interface Pairing {
@@ -17,6 +18,8 @@ interface Pairing {
   createdAt: Date;
   photoLum?: number | null;
   photoWarmth?: number | null;
+  caption?: string | null;
+  captionDismissed?: boolean;
 }
 
 // Mood quadrants — matches the portrait mood field sun-path metaphor.
@@ -45,9 +48,13 @@ function moodOf(p: Pairing): Mood | null {
   return "balanced";
 }
 
-export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
+export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[] }) {
+  const [pairings, setPairings] = useState<Pairing[]>(initialPairings);
   const [mood, setMood] = useState<Mood>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const updatePairing = (id: string, patch: Partial<Pairing>) =>
+    setPairings((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   // Count per mood (for chip badges). Only shows chips that actually have
   // entries — no point offering empty filters.
@@ -218,7 +225,11 @@ export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
 
       {/* Lightbox: photo + Spotify embed + meta. ESC or backdrop to close. */}
       {openPairing && (
-        <Lightbox pairing={openPairing} onClose={() => setOpenId(null)} />
+        <Lightbox
+          pairing={openPairing}
+          onClose={() => setOpenId(null)}
+          onUpdate={(patch) => updatePairing(openPairing.id, patch)}
+        />
       )}
     </div>
   );
@@ -227,14 +238,48 @@ export function ExploreGrid({ pairings }: { pairings: Pairing[] }) {
 function Lightbox({
   pairing,
   onClose,
+  onUpdate,
 }: {
   pairing: Pairing;
   onClose: () => void;
+  onUpdate: (patch: Partial<Pairing>) => void;
 }) {
   const m = moodOf(pairing);
   const moodLabel = m
     ? MOOD_CHIPS.find((c) => c.value === m)?.label
     : null;
+  const [captionBusy, setCaptionBusy] = useState(false);
+  const showCaption =
+    pairing.caption && !pairing.captionDismissed;
+
+  const refreshCaption = async () => {
+    setCaptionBusy(true);
+    try {
+      const res = await fetch(`/api/pairings/${pairing.id}/caption`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("caption failed");
+      const data: { caption: string | null } = await res.json();
+      onUpdate({ caption: data.caption, captionDismissed: false });
+    } catch {
+      toast.error("Could not refresh caption.");
+    } finally {
+      setCaptionBusy(false);
+    }
+  };
+
+  const dismissCaption = async () => {
+    onUpdate({ captionDismissed: true });
+    try {
+      await fetch(`/api/pairings/${pairing.id}/caption`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dismissed: true }),
+      });
+    } catch {
+      /* silent — already hidden locally */
+    }
+  };
 
   return (
     <div
@@ -293,6 +338,31 @@ function Lightbox({
             <blockquote className="font-serif text-base text-earth/80 italic leading-relaxed border-l-2 border-amber/40 pl-3">
               {pairing.note}
             </blockquote>
+          )}
+
+          {showCaption && (
+            <div className="group flex items-start gap-2">
+              <p className="font-serif text-sm text-earth/70 italic leading-relaxed flex-1">
+                {pairing.caption}
+              </p>
+              <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
+                <button
+                  onClick={refreshCaption}
+                  disabled={captionBusy}
+                  aria-label="Refresh caption"
+                  className="text-earth/40 hover:text-earth transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw size={12} className={captionBusy ? "animate-spin" : ""} />
+                </button>
+                <button
+                  onClick={dismissCaption}
+                  aria-label="Dismiss caption"
+                  className="text-earth/40 hover:text-terracotta transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Meta strip: when / where / mood */}

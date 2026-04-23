@@ -53,12 +53,12 @@ export default async function LandingPage() {
             <p className="font-mono text-xs text-earth/50 tracking-widest uppercase mb-8">
               A portrait of who you are
             </p>
-            <h1 className="font-serif text-5xl md:text-6xl lg:text-7xl text-earth leading-[0.95] mb-10">
-              Not through introspection.
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-earth leading-[1.02] mb-10">
+              Trace the sights, sounds, moments, and meanings that shape a life.
             </h1>
             <p className="font-mono text-sm text-earth/60 max-w-md leading-relaxed mb-10">
-              Trace builds a picture of who you are through what you love, where
-              you&apos;ve been, and what sounds right next to what image.
+              Not through introspection. Through what you love, where you&apos;ve
+              been, and what sounds right next to what image.
             </p>
             <Link
               href="/auth/signin"

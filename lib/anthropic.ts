@@ -163,3 +163,130 @@ Return JSON only.`;
 
   return JSON.parse(jsonMatch[0]);
 }
+
+// ---------------------------------------------------------------------------
+// Notice keyword / short summary
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a one-keyword OR short-phrase summary for a Notice. Fails graceful
+ * with `null` on any error — callers render nothing instead of filler.
+ */
+export async function summarizeNotice(
+  content: string
+): Promise<{ keyword: string | null; summary: string | null }> {
+  const trimmed = content.trim();
+  if (!trimmed || trimmed.length < 4) return { keyword: null, summary: null };
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 120,
+      messages: [
+        {
+          role: "user",
+          content: `You are tagging a short "notice" — a personal observation. Return JSON only:
+
+{"keyword": "one lowercase word", "summary": "3-6 word phrase"}
+
+Rules:
+- Prefer ONE of the two fields. If a single vivid keyword fits, set summary to null.
+- If only a short phrase fits, set keyword to null.
+- Keyword is one lowercase word, a noun or feeling. No hashtags, no adjectives stacked.
+- Summary is 3-6 words, emotionally precise, no therapy-speak, no life-coach tone.
+- Never quote the notice. Write your own language.
+- If the notice is too generic or empty to tag, return {"keyword": null, "summary": null}.
+
+Notice:
+"""
+${trimmed.slice(0, 500)}
+"""`,
+        },
+      ],
+    });
+
+    const c = response.content[0];
+    if (c.type !== "text") return { keyword: null, summary: null };
+    const match = c.text.match(/\{[\s\S]*\}/);
+    if (!match) return { keyword: null, summary: null };
+    const parsed = JSON.parse(match[0]);
+    const keyword =
+      typeof parsed.keyword === "string" && parsed.keyword.trim()
+        ? parsed.keyword.trim().toLowerCase().slice(0, 24)
+        : null;
+    const summary =
+      typeof parsed.summary === "string" && parsed.summary.trim()
+        ? parsed.summary.trim().slice(0, 64)
+        : null;
+    return { keyword, summary };
+  } catch {
+    return { keyword: null, summary: null };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pairing caption — photo + song pairing "read"
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates a short original caption for a photo+song pairing. Fails graceful
+ * with `null`. Hard rules: no lyrics, no paraphrase, no therapy-speak.
+ */
+export async function captionPairing(input: {
+  photoUrl: string;
+  trackName: string;
+  artistName: string;
+  note?: string | null;
+  location?: string | null;
+}): Promise<string | null> {
+  try {
+    const hints = [
+      `Song: ${input.trackName} — ${input.artistName}`,
+      input.note ? `User note: ${input.note}` : null,
+      input.location ? `Location: ${input.location}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 80,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "url", url: input.photoUrl } },
+            {
+              type: "text",
+              text: `Write ONE short caption (4–12 words) for this photo+song pairing.
+
+Tone:
+- emotionally precise, a little poetic, slightly dry
+- feels like something the app noticed, not something explained
+- concrete sensory nouns and verbs over adjectives
+- no therapy-speak, no life-coach tone, no "embracing", "journey", "presence"
+- never quote or paraphrase song lyrics
+- no hashtags, no emoji, no song title, no artist name
+- no period at the end unless it's a complete sentence
+
+Context (do not quote verbatim):
+${hints}
+
+Return the caption text only, nothing else.`,
+            },
+          ],
+        },
+      ],
+    });
+
+    const c = response.content[0];
+    if (c.type !== "text") return null;
+    let out = c.text.trim().replace(/^["'`]+|["'`]+$/g, "").trim();
+    // Safety: clamp length; strip trailing periods from fragments.
+    if (!out) return null;
+    if (out.length > 120) out = out.slice(0, 120).trim();
+    return out;
+  } catch {
+    return null;
+  }
+}

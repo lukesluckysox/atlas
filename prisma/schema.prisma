@@ -76,21 +76,24 @@ model VerificationToken {
 }
 
 model Pairing {
-  id             String   @id @default(cuid())
-  userId         String
-  photoUrl       String
-  spotifyTrackId String
-  trackName      String
-  artistName     String
-  albumArt       String?
-  note           String?
-  location       String?
-  latitude       Float?
-  longitude      Float?
-  photoLum       Float?
-  photoWarmth    Float?
-  createdAt      DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id])
+  id               String   @id @default(cuid())
+  userId           String
+  photoUrl         String
+  spotifyTrackId   String
+  trackName        String
+  artistName       String
+  albumArt         String?
+  genres           String[] @default([])
+  note             String?
+  caption          String?
+  captionDismissed Boolean  @default(false)
+  location         String?
+  latitude         Float?
+  longitude        Float?
+  photoLum         Float?
+  photoWarmth      Float?
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id])
 }
 
 model Experience {
@@ -137,6 +140,8 @@ model Mark {
   id          String   @id @default(cuid())
   userId      String
   content     String
+  summary     String?
+  keyword     String?
   photoUrl    String?
   latitude    Float?
   longitude   Float?

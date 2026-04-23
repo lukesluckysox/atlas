@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { summarizeNotice } from "@/lib/anthropic";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -30,10 +31,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Content required" }, { status: 400 });
   }
 
+  // Generate a lightweight keyword / short-phrase summary. Fails graceful —
+  // if Anthropic hiccups or the content is too thin, we save without a tag.
+  const { keyword, summary } = await summarizeNotice(content.trim());
+
   const mark = await prisma.mark.create({
     data: {
       userId: session.user.id,
       content: content.trim(),
+      keyword,
+      summary,
       photoUrl,
       latitude,
       longitude,

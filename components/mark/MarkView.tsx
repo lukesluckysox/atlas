@@ -14,6 +14,8 @@ interface Mark {
   photoUrl?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  keyword?: string | null;
+  summary?: string | null;
   createdAt: Date;
 }
 
@@ -31,6 +33,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filterKeyword, setFilterKeyword] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -168,7 +171,13 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
       });
       if (!res.ok) throw new Error("update failed");
       const updated: Mark = await res.json();
-      setMarks((ms) => ms.map((m) => (m.id === id ? { ...m, content: updated.content } : m)));
+      setMarks((ms) =>
+        ms.map((m) =>
+          m.id === id
+            ? { ...m, content: updated.content, keyword: updated.keyword ?? null, summary: updated.summary ?? null }
+            : m
+        )
+      );
       setEditingId(null);
       setEditDraft("");
     } catch {
@@ -303,8 +312,60 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
       </div>
 
+      {(() => {
+        // Aggregate recurring keywords into tappable cluster chips.
+        // Quiet styling, no counts — feels like something the app noticed.
+        const counts = new Map<string, number>();
+        for (const m of marks) {
+          const k = m.keyword?.trim().toLowerCase();
+          if (!k) continue;
+          counts.set(k, (counts.get(k) ?? 0) + 1);
+        }
+        const recurring = Array.from(counts.entries())
+          .filter(([, c]) => c >= 2)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([k]) => k);
+        if (recurring.length === 0) return null;
+        return (
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-earth/30">
+              Recurring
+            </span>
+            {recurring.map((k) => {
+              const active = filterKeyword === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setFilterKeyword(active ? null : k)}
+                  className={`font-mono text-xs px-2 py-1 border transition-colors ${
+                    active
+                      ? "border-amber bg-amber/15 text-earth"
+                      : "border-earth/10 text-earth/55 hover:border-earth/30"
+                  }`}
+                >
+                  {k}
+                </button>
+              );
+            })}
+            {filterKeyword && (
+              <button
+                onClick={() => setFilterKeyword(null)}
+                className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       <div className="space-y-0">
-        {marks.map((mark, i) => {
+        {marks
+          .filter((m) =>
+            !filterKeyword || m.keyword?.trim().toLowerCase() === filterKeyword
+          )
+          .map((mark, i) => {
           const isEditing = editingId === mark.id;
           const isDeleting = deletingId === mark.id;
           const locLabel = mark.latitude != null && mark.longitude != null
@@ -353,6 +414,20 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
                       <p className="font-mono text-sm text-earth/80 leading-relaxed">
                         {mark.content}
                       </p>
+                      {(mark.keyword || mark.summary) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {mark.keyword && (
+                            <span className="font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-earth/5 text-earth/60">
+                              {mark.keyword}
+                            </span>
+                          )}
+                          {mark.summary && (
+                            <span className="font-mono text-[10px] text-earth/40 italic">
+                              {mark.summary}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {mark.photoUrl && (
                         <div className="mt-3">
                           <Image

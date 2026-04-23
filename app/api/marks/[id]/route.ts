@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { summarizeNotice } from "@/lib/anthropic";
 
 export async function DELETE(
   _req: NextRequest,
@@ -59,9 +60,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Content required" }, { status: 400 });
   }
 
+  // Re-tag on edit so keyword/summary stay in sync with content.
+  const { keyword, summary } = await summarizeNotice(content.trim());
+
   const updated = await prisma.mark.update({
     where: { id: params.id },
-    data: { content: content.trim() },
+    data: { content: content.trim(), keyword, summary },
   });
 
   return NextResponse.json(updated);

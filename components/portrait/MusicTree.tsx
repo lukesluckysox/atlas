@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Music2 } from "lucide-react";
 
 /**
- * Vertical music tree.
- *   - Trunk rises from "YOU" at the bottom of the canvas.
- *   - Branches fan up and out, alternating left/right. Strongest artists
- *     sit closer to the trunk top; weaker ones lower and more to the side.
- *   - Each branch ends in a cluster of leaves (album art).
- *   - Artists that share genres are connected by thin dashed vines, so
- *     musically-similar branches visually reach toward each other.
+ * Trace-native music tree.
+ *
+ * Only shows music the user has actually paired with a photo inside Traces.
+ * Vertical layout:
+ *   - Trunk rises from "YOU" at the bottom.
+ *   - Primary branches are GENRES (strongest near the top of the trunk).
+ *   - Each genre branch forks into artist twigs.
+ *   - Each artist twig ends in album-art leaves (one per paired track).
  */
 
 interface TrackLeaf {
@@ -21,32 +22,26 @@ interface TrackLeaf {
 
 interface ArtistBranch {
   name: string;
-  count: number;           // internal weight
-  rank?: number | null;    // 1-based rank in Spotify's top-artists list
-  recentPlays?: number;    // actual plays in the recently-played window
-  genres?: string[];
+  count: number;
+  genres: string[];
   tracks: TrackLeaf[];
 }
 
-interface SimilarityLink {
-  a: string;
-  b: string;
-  shared: string[];
+interface GenreGroup {
+  genre: string;
+  artists: ArtistBranch[];
 }
 
 interface TreeData {
   totalPairings: number;
   totalArtists: number;
-  branches: ArtistBranch[];
-  links: SimilarityLink[];
-  timeRange?: string;
-  source?: string;
+  groups: GenreGroup[];
 }
 
 export function MusicTree() {
   const [data, setData] = useState<TreeData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [focused, setFocused] = useState<string | null>(null);
+  const [focusedGenre, setFocusedGenre] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,13 +68,14 @@ export function MusicTree() {
     );
   }
 
-  if (!data || data.branches.length === 0) {
+  if (!data || data.groups.length === 0 || data.totalArtists === 0) {
     return (
       <div className="border border-earth/10 p-12 text-center">
         <Music2 size={24} className="text-sage/60 mx-auto mb-5" />
-        <p className="font-mono text-sm text-earth/60 mb-2">No music yet.</p>
+        <p className="font-mono text-sm text-earth/60 mb-2">No paired music yet.</p>
         <p className="font-mono text-xs text-earth/40 leading-relaxed max-w-sm mx-auto">
-          Connect Spotify or pair a photo with a track to start your tree.
+          Your tree grows from photos you pair with songs. Each pairing becomes
+          a leaf; artists branch; genres become the canopy.
         </p>
       </div>
     );
@@ -90,163 +86,150 @@ export function MusicTree() {
       <div className="flex items-center justify-between border-b border-earth/10 px-4 py-3">
         <p className="label">Music tree</p>
         <p className="font-mono text-xs text-earth/30">
-          {data.source === "spotify"
-            ? `Last 4 weeks · top ${data.totalArtists}`
-            : `${data.totalArtists} artist${data.totalArtists === 1 ? "" : "s"}`}
+          {data.totalPairings} pairing{data.totalPairings === 1 ? "" : "s"} ·{" "}
+          {data.totalArtists} artist{data.totalArtists === 1 ? "" : "s"}
         </p>
       </div>
 
       <div className="relative overflow-hidden">
         <TreeCanvas
-          branches={data.branches}
-          links={data.links ?? []}
-          focused={focused}
-          onFocus={setFocused}
+          groups={data.groups}
+          focusedGenre={focusedGenre}
+          onFocusGenre={setFocusedGenre}
         />
       </div>
 
-      {focused ? (
-        <div className="border-t border-earth/10 px-4 py-3">
-          <p className="font-mono text-xs text-earth/50">
-            <span className="text-earth/80">{focused}</span>
-            {(() => {
-              const b = data.branches.find((x) => x.name === focused);
-              if (!b?.genres || b.genres.length === 0) return null;
-              return <> — {b.genres.slice(0, 3).join(" · ")}</>;
-            })()}
-          </p>
-        </div>
-      ) : (
-        data.links.length > 0 && (
-          <div className="border-t border-earth/10 px-4 py-3">
-            <p className="font-mono text-[10px] text-earth/40">
-              Dashed vines connect artists that share a genre. Hover a branch to isolate.
-            </p>
-          </div>
-        )
-      )}
+      <div className="border-t border-earth/10 px-4 py-3">
+        <p className="font-mono text-[10px] text-earth/40">
+          {focusedGenre
+            ? focusedGenre
+            : "Branches = genres. Twigs = artists. Leaves = songs you paired with a photo."}
+        </p>
+      </div>
     </div>
   );
 }
 
 // ------------------------------------------------------------------
-// Vertical tree layout
+// Vertical tree layout (pairings-only)
 // ------------------------------------------------------------------
 
-// Canvas is wider than tall so branches have room to spread.
 const VW = 160;
-const VH = 110;
+const VH = 130;
 const TRUNK_X = VW / 2;
-const ROOT_Y = VH - 6; // "YOU" sits near the bottom
-const TRUNK_TOP = 40;   // top of the main trunk
+const ROOT_Y = VH - 6;
+const TRUNK_TOP = 30;
 
-interface Positioned {
-  branch: ArtistBranch;
-  index: number;
-  // Where this branch attaches to the trunk
+interface PositionedGenre {
+  group: GenreGroup;
+  side: "L" | "R";
   attachX: number;
   attachY: number;
-  // Tip of the branch (artist node position)
   tipX: number;
   tipY: number;
-  // Cubic bezier control points
   cp1: { x: number; y: number };
   cp2: { x: number; y: number };
-  leaves: Array<{ track: TrackLeaf; x: number; y: number }>;
-  nodeRadius: number;
-  side: "L" | "R";
+  artists: PositionedArtist[];
 }
 
-function layoutTree(branches: ArtistBranch[]): Positioned[] {
-  const maxCount = Math.max(...branches.map((b) => b.count), 1);
-  const N = branches.length;
+interface PositionedArtist {
+  artist: ArtistBranch;
+  startX: number;
+  startY: number;
+  tipX: number;
+  tipY: number;
+  leaves: Array<{ track: TrackLeaf; x: number; y: number }>;
+}
 
-  // Sort by count so strongest branches attach highest on the trunk.
-  const ordered = branches
-    .map((b, i) => ({ b, i, count: b.count }))
-    .sort((a, b) => b.count - a.count);
+function layoutTree(groups: GenreGroup[]): PositionedGenre[] {
+  const maxCount = Math.max(
+    ...groups.flatMap((g) => g.artists.map((a) => a.count)),
+    1
+  );
+  const N = groups.length;
+
+  // Sort by total count so strongest genres attach high on the trunk.
+  const ordered = groups
+    .map((g) => ({ g, total: g.artists.reduce((s, a) => s + a.count, 0) }))
+    .sort((a, b) => b.total - a.total);
 
   return ordered.map((entry, rank) => {
-    const { b: branch, i: originalIndex } = entry;
-
-    // Alternate sides; strongest goes to the right, next left, etc.
+    const { g: group } = entry;
     const side: "L" | "R" = rank % 2 === 0 ? "R" : "L";
     const sideSign = side === "R" ? 1 : -1;
 
-    // Strongest branches attach near the top of the trunk, weakest near bottom
-    // (but not below the root).
-    const attachT = rank / Math.max(N - 1, 1); // 0 at strongest, 1 at weakest
-    const attachY = TRUNK_TOP + attachT * (ROOT_Y - TRUNK_TOP - 18);
+    const attachT = rank / Math.max(N - 1, 1);
+    const attachY = TRUNK_TOP + attachT * (ROOT_Y - TRUNK_TOP - 22);
     const attachX = TRUNK_X;
 
-    // Branch reach grows with count relative to max. Strong = longer branch.
-    const rel = branch.count / maxCount;
-    const reach = 32 + rel * 28; // 32..60
-
-    // Tip of the branch: horizontally out, and slightly upward for lift.
-    // Upper branches lift less (they're already high); lower branches lift more.
-    const lift = 6 + (1 - attachT) * 6 + rel * 4; // 6..16
+    const reach = 30 + (1 - rank / Math.max(N, 1)) * 20; // 30..50
+    const lift = 8 + (1 - attachT) * 6;
     const tipX = attachX + sideSign * reach;
     const tipY = attachY - lift;
 
-    // Cubic bezier for a natural curve: first control hugs the trunk briefly,
-    // second control aims at the tip but from below for an arcing feel.
-    const cp1 = { x: attachX + sideSign * 4, y: attachY - 2 };
-    const cp2 = { x: attachX + sideSign * reach * 0.65, y: tipY + 6 };
+    const cp1 = { x: attachX + sideSign * 3, y: attachY - 2 };
+    const cp2 = { x: attachX + sideSign * reach * 0.6, y: tipY + 5 };
 
-    // Node radius scales with count
-    const nodeRadius = 2.8 + rel * 2.4; // 2.8..5.2
-
-    // Leaves cluster around the tip in a small fan.
-    const leaves = branch.tracks.map((track, j) => {
-      const tracks = branch.tracks.length;
-      const tNorm = tracks === 1 ? 0.5 : j / (tracks - 1);
-      // Angle fan centered on a vector pointing "up-and-out" from the tip
-      const baseAngle = side === "R" ? -30 : -150; // degrees; -90 is straight up
-      const fanSpan = 90;
+    // Position artist twigs around the branch tip in a small fan.
+    const artists = group.artists.map((artist, i) => {
+      const count = group.artists.length;
+      const tNorm = count === 1 ? 0.5 : i / (count - 1);
+      const baseAngle = side === "R" ? -20 : -160;
+      const fanSpan = 70;
       const angleDeg = baseAngle + (tNorm - 0.5) * fanSpan;
       const angleRad = (angleDeg * Math.PI) / 180;
-      const dist = 5 + (tNorm - 0.5) ** 2 * 2 + 2; // slight bow
+      const twigLen = 8 + (artist.count / maxCount) * 6;
+      const aTipX = tipX + twigLen * Math.cos(angleRad);
+      const aTipY = tipY + twigLen * Math.sin(angleRad);
+
+      // Leaves cluster around artist twig tip
+      const leaves = artist.tracks.map((track, j) => {
+        const trackCount = artist.tracks.length;
+        const lNorm = trackCount === 1 ? 0.5 : j / (trackCount - 1);
+        const leafAngle = angleDeg + (lNorm - 0.5) * 60;
+        const leafRad = (leafAngle * Math.PI) / 180;
+        const leafDist = 3 + (lNorm - 0.5) ** 2 * 1.5 + 1.5;
+        return {
+          track,
+          x: aTipX + leafDist * Math.cos(leafRad),
+          y: aTipY + leafDist * Math.sin(leafRad),
+        };
+      });
+
       return {
-        track,
-        x: tipX + dist * Math.cos(angleRad),
-        y: tipY + dist * Math.sin(angleRad),
+        artist,
+        startX: tipX,
+        startY: tipY,
+        tipX: aTipX,
+        tipY: aTipY,
+        leaves,
       };
     });
 
     return {
-      branch,
-      index: originalIndex,
+      group,
+      side,
       attachX,
       attachY,
       tipX,
       tipY,
       cp1,
       cp2,
-      leaves,
-      nodeRadius,
-      side,
+      artists,
     };
   });
 }
 
 function TreeCanvas({
-  branches,
-  links,
-  focused,
-  onFocus,
+  groups,
+  focusedGenre,
+  onFocusGenre,
 }: {
-  branches: ArtistBranch[];
-  links: SimilarityLink[];
-  focused: string | null;
-  onFocus: (name: string | null) => void;
+  groups: GenreGroup[];
+  focusedGenre: string | null;
+  onFocusGenre: (g: string | null) => void;
 }) {
-  const positioned = useMemo(() => layoutTree(branches), [branches]);
-  const byName = useMemo(() => {
-    const m = new Map<string, Positioned>();
-    positioned.forEach((p) => m.set(p.branch.name, p));
-    return m;
-  }, [positioned]);
+  const positioned = useMemo(() => layoutTree(groups), [groups]);
 
   return (
     <svg
@@ -254,7 +237,7 @@ function TreeCanvas({
       viewBox={`0 0 ${VW} ${VH}`}
       style={{ display: "block", maxWidth: 720, margin: "0 auto" }}
     >
-      {/* Soft ground shadow under root */}
+      {/* Ground shadow */}
       <ellipse
         cx={TRUNK_X}
         cy={ROOT_Y + 2}
@@ -264,7 +247,7 @@ function TreeCanvas({
         style={{ opacity: 0.08 }}
       />
 
-      {/* Trunk — tapered rectangle */}
+      {/* Trunk */}
       <path
         d={`M ${TRUNK_X - 1.8} ${ROOT_Y}
             L ${TRUNK_X + 1.8} ${ROOT_Y}
@@ -274,170 +257,181 @@ function TreeCanvas({
         className="fill-earth"
         style={{ opacity: 0.55 }}
       />
+      <circle cx={TRUNK_X} cy={TRUNK_TOP} r="1.2" className="fill-earth" style={{ opacity: 0.55 }} />
 
-      {/* Trunk top crown — tiny rounded bump so branches feel rooted */}
-      <circle
-        cx={TRUNK_X}
-        cy={TRUNK_TOP}
-        r="1.2"
-        className="fill-earth"
-        style={{ opacity: 0.55 }}
-      />
-
-      {/* Similarity vines — dashed lines between branch tips that share genres */}
-      {links.map((link, i) => {
-        const A = byName.get(link.a);
-        const B = byName.get(link.b);
-        if (!A || !B) return null;
-        const dim =
-          focused && focused !== link.a && focused !== link.b ? 0.06 : 0.25;
-        // Curve through the midpoint shifted slightly up for a natural arc
-        const midX = (A.tipX + B.tipX) / 2;
-        const midY = Math.min(A.tipY, B.tipY) - 8;
-        return (
-          <path
-            key={`sim-${i}`}
-            d={`M ${A.tipX} ${A.tipY} Q ${midX} ${midY} ${B.tipX} ${B.tipY}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="0.28"
-            strokeDasharray="0.8 1.1"
-            className="text-sage"
-            style={{ opacity: dim }}
-          />
-        );
-      })}
-
-      {/* Branches — cubic bezier curves from trunk to each tip */}
+      {/* Genre branches */}
       {positioned.map((p) => {
-        const dim = focused && focused !== p.branch.name ? 0.14 : 0.7;
-        const rel = p.nodeRadius / 5.2; // 0..1
-        const width = 0.55 + rel * 0.7; // thicker branches for stronger artists
+        const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.14 : 0.72;
         return (
           <path
-            key={`branch-${p.branch.name}`}
+            key={`genre-${p.group.genre}`}
             d={`M ${p.attachX} ${p.attachY}
                 C ${p.cp1.x} ${p.cp1.y},
                   ${p.cp2.x} ${p.cp2.y},
                   ${p.tipX} ${p.tipY}`}
             fill="none"
             stroke="currentColor"
-            strokeWidth={width}
+            strokeWidth={1.1}
             strokeLinecap="round"
             className="text-earth"
-            style={{ opacity: dim }}
+            style={{ opacity: dim, cursor: "pointer" }}
+            onMouseEnter={() => onFocusGenre(p.group.genre)}
+            onMouseLeave={() => onFocusGenre(null)}
           />
         );
       })}
 
-      {/* Leaf stems: tiny line from tip to each leaf */}
+      {/* Artist twigs */}
       {positioned.map((p) => {
-        const dim = focused && focused !== p.branch.name ? 0.06 : 0.35;
-        return p.leaves.map((leaf, i) => (
+        const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.08 : 0.55;
+        return p.artists.map((a) => (
           <line
-            key={`stem-${p.branch.name}-${i}`}
-            x1={p.tipX}
-            y1={p.tipY}
-            x2={leaf.x}
-            y2={leaf.y}
+            key={`twig-${p.group.genre}-${a.artist.name}`}
+            x1={a.startX}
+            y1={a.startY}
+            x2={a.tipX}
+            y2={a.tipY}
             stroke="currentColor"
-            strokeWidth="0.22"
-            className="text-sage"
+            strokeWidth="0.4"
+            strokeLinecap="round"
+            className="text-earth"
             style={{ opacity: dim }}
           />
         ));
       })}
 
-      {/* Leaves — album art circles */}
+      {/* Leaf stems */}
+      {positioned.map((p) => {
+        const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.05 : 0.3;
+        return p.artists.flatMap((a) =>
+          a.leaves.map((leaf, i) => (
+            <line
+              key={`stem-${p.group.genre}-${a.artist.name}-${i}`}
+              x1={a.tipX}
+              y1={a.tipY}
+              x2={leaf.x}
+              y2={leaf.y}
+              stroke="currentColor"
+              strokeWidth="0.2"
+              className="text-sage"
+              style={{ opacity: dim }}
+            />
+          ))
+        );
+      })}
+
+      {/* Leaves — album art */}
       {positioned.map((p) =>
-        p.leaves.map((leaf, i) => {
-          const dim = focused && focused !== p.branch.name ? 0.22 : 1;
-          const clipId = `leafclip-${p.branch.name.replace(/\W+/g, "_")}-${i}`;
-          return (
-            <g key={`leaf-${p.branch.name}-${i}`} style={{ opacity: dim }}>
-              {leaf.track.albumArt ? (
-                <>
-                  <defs>
-                    <clipPath id={clipId}>
-                      <circle cx={leaf.x} cy={leaf.y} r="2.4" />
-                    </clipPath>
-                  </defs>
-                  <image
-                    href={leaf.track.albumArt}
-                    x={leaf.x - 2.4}
-                    y={leaf.y - 2.4}
-                    width="4.8"
-                    height="4.8"
-                    clipPath={`url(#${clipId})`}
-                    preserveAspectRatio="xMidYMid slice"
-                  />
+        p.artists.flatMap((a) =>
+          a.leaves.map((leaf, i) => {
+            const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.2 : 1;
+            const clipId = `leafclip-${p.group.genre}-${a.artist.name}-${i}`.replace(
+              /\W+/g,
+              "_"
+            );
+            return (
+              <g key={`leaf-${clipId}`} style={{ opacity: dim }}>
+                {leaf.track.albumArt ? (
+                  <>
+                    <defs>
+                      <clipPath id={clipId}>
+                        <circle cx={leaf.x} cy={leaf.y} r="2.1" />
+                      </clipPath>
+                    </defs>
+                    <image
+                      href={leaf.track.albumArt}
+                      x={leaf.x - 2.1}
+                      y={leaf.y - 2.1}
+                      width="4.2"
+                      height="4.2"
+                      clipPath={`url(#${clipId})`}
+                      preserveAspectRatio="xMidYMid slice"
+                    />
+                    <circle
+                      cx={leaf.x}
+                      cy={leaf.y}
+                      r="2.1"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="0.22"
+                      className="text-earth/40"
+                    />
+                  </>
+                ) : (
                   <circle
                     cx={leaf.x}
                     cy={leaf.y}
-                    r="2.4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="0.25"
-                    className="text-earth/40"
+                    r="1.5"
+                    fill="currentColor"
+                    className="text-amber"
                   />
-                </>
-              ) : (
-                <circle
-                  cx={leaf.x}
-                  cy={leaf.y}
-                  r="1.7"
-                  fill="currentColor"
-                  className="text-amber"
-                />
-              )}
-              <title>{`${leaf.track.name} — ${p.branch.name}`}</title>
-            </g>
+                )}
+                <title>{`${leaf.track.name} — ${a.artist.name}`}</title>
+              </g>
+            );
+          })
+        )
+      )}
+
+      {/* Artist labels at twig tips */}
+      {positioned.map((p) =>
+        p.artists.map((a) => {
+          const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.3 : 1;
+          const labelSide: "L" | "R" = a.tipX >= TRUNK_X ? "R" : "L";
+          const offset = 2.6;
+          const lx = a.tipX + (labelSide === "R" ? offset : -offset);
+          const anchor = labelSide === "R" ? "start" : "end";
+          const display =
+            a.artist.name.length > 18
+              ? `${a.artist.name.slice(0, 16)}…`
+              : a.artist.name;
+          return (
+            <text
+              key={`artist-${p.group.genre}-${a.artist.name}`}
+              x={lx}
+              y={a.tipY + 0.7}
+              textAnchor={anchor}
+              className="fill-earth"
+              style={{
+                fontSize: "2.6px",
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontWeight: 500,
+                opacity: dim,
+              }}
+            >
+              {display}
+            </text>
           );
         })
       )}
 
-      {/* Artist nodes + labels at branch tips */}
+      {/* Genre labels at branch tips */}
       {positioned.map((p) => {
-        const isFocused = focused === p.branch.name;
-        const dim = focused && !isFocused ? 0.35 : 1;
+        const dim = focusedGenre && focusedGenre !== p.group.genre ? 0.4 : 1;
+        const lx = p.attachX + (p.side === "R" ? 4 : -4);
+        const ly = p.attachY - 1;
+        const anchor = p.side === "R" ? "start" : "end";
         return (
-          <g
-            key={`node-${p.branch.name}`}
-            style={{ cursor: "pointer", opacity: dim }}
-            onMouseEnter={() => onFocus(p.branch.name)}
-            onMouseLeave={() => onFocus(null)}
+          <text
+            key={`gtext-${p.group.genre}`}
+            x={lx}
+            y={ly}
+            textAnchor={anchor}
+            className="fill-earth"
+            style={{
+              fontSize: "2.4px",
+              fontFamily: "IBM Plex Mono, monospace",
+              letterSpacing: "0.12em",
+              opacity: dim * 0.6,
+              textTransform: "uppercase",
+            }}
           >
-            <title>
-              {p.branch.name}
-              {p.branch.rank ? ` — #${p.branch.rank}` : ""}
-              {p.branch.recentPlays ? ` · ${p.branch.recentPlays} recent play${p.branch.recentPlays === 1 ? "" : "s"}` : ""}
-            </title>
-            <circle
-              cx={p.tipX}
-              cy={p.tipY}
-              r={p.nodeRadius}
-              className="fill-earth"
-            />
-            <circle
-              cx={p.tipX}
-              cy={p.tipY}
-              r={p.nodeRadius - 0.9}
-              className="fill-parchment"
-            />
-            <ArtistLabel
-              x={p.tipX}
-              y={p.tipY}
-              side={p.side}
-              name={p.branch.name}
-              rank={p.branch.rank}
-              recentPlays={p.branch.recentPlays}
-              nodeRadius={p.nodeRadius}
-            />
-          </g>
+            {p.group.genre}
+          </text>
         );
       })}
 
-      {/* Root "YOU" marker */}
+      {/* Root YOU */}
       <circle cx={TRUNK_X} cy={ROOT_Y} r="5" className="fill-earth" />
       <text
         x={TRUNK_X}
@@ -453,69 +447,5 @@ function TreeCanvas({
         YOU
       </text>
     </svg>
-  );
-}
-
-function ArtistLabel({
-  x,
-  y,
-  side,
-  name,
-  rank,
-  recentPlays,
-  nodeRadius,
-}: {
-  x: number;
-  y: number;
-  side: "L" | "R";
-  name: string;
-  rank: number | null | undefined;
-  recentPlays: number | undefined;
-  nodeRadius: number;
-}) {
-  const sideSign = side === "R" ? 1 : -1;
-  const offset = nodeRadius + 2.2;
-  const lx = x + sideSign * offset;
-  const ly = y + 0.6;
-  const anchor = side === "R" ? "start" : "end";
-  const display = name.length > 22 ? `${name.slice(0, 20)}…` : name;
-
-  // Honest, minimal meta: a small rank pip if present, nothing else. Spotify
-  // doesn't expose true scrobble counts, so the visual (branch thickness,
-  // leaf cluster size) carries the intensity signal — not a number.
-  const meta = rank && rank > 0 ? `#${rank}` : "";
-  void recentPlays; // intentionally unused: shown via hover tooltip only
-
-  return (
-    <>
-      <text
-        x={lx}
-        y={ly}
-        textAnchor={anchor}
-        className="fill-earth"
-        style={{
-          fontSize: "3.2px",
-          fontFamily: "'Playfair Display', Georgia, serif",
-          fontWeight: 500,
-        }}
-      >
-        {display}
-      </text>
-      {meta && (
-        <text
-          x={lx}
-          y={ly + 3}
-          textAnchor={anchor}
-          className="fill-earth/50"
-          style={{
-            fontSize: "2.1px",
-            fontFamily: "IBM Plex Mono, monospace",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {meta}
-        </text>
-      )}
-    </>
   );
 }

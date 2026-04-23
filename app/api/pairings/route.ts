@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { captionPairing } from "@/lib/anthropic";
+import { spotifyApi } from "@/lib/spotify-user";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,6 +17,25 @@ export async function GET(_req: NextRequest) {
   });
 
   return NextResponse.json(pairings);
+}
+
+// Resolve genres for a track's primary artist via Spotify. Best-effort;
+// returns [] on any failure so saves never block.
+async function resolveGenres(userId: string, trackId: string): Promise<string[]> {
+  try {
+    const track = await spotifyApi<{
+      artists: Array<{ id: string }>;
+    }>(userId, `/tracks/${trackId}`);
+    const artistId = track?.artists?.[0]?.id;
+    if (!artistId) return [];
+    const artist = await spotifyApi<{ genres?: string[] }>(
+      userId,
+      `/artists/${artistId}`
+    );
+    return Array.isArray(artist?.genres) ? artist!.genres!.slice(0, 6) : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -42,6 +63,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Fetch genres (for the music tree) in parallel with caption generation.
+  // Both fail graceful — pairing saves either way.
+  const [genres, caption] = await Promise.all([
+    resolveGenres(session.user.id, spotifyTrackId),
+    captionPairing({
+      photoUrl,
+      trackName,
+      artistName,
+      note: note ?? null,
+      location: location ?? null,
+    }),
+  ]);
+
   const pairing = await prisma.pairing.create({
     data: {
       userId: session.user.id,
@@ -50,7 +84,9 @@ export async function POST(req: NextRequest) {
       trackName,
       artistName,
       albumArt,
+      genres,
       note,
+      caption,
       location,
       latitude,
       longitude,

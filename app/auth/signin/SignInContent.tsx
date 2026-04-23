@@ -96,10 +96,13 @@ export default function SignInContent() {
       <div className="w-full max-w-sm">
         <Link
           href="/"
-          className="block font-serif text-3xl text-earth mb-8 text-center"
+          className="block font-serif text-3xl text-earth mb-3 text-center"
         >
           Trace
         </Link>
+        <p className="font-mono text-[11px] text-earth/50 text-center leading-relaxed mb-8 px-4">
+          Trace the sights, sounds, moments, and meanings that shape a life.
+        </p>
 
 
         {(urlError || formError) && (

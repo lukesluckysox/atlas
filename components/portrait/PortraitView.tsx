@@ -158,12 +158,10 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
           </div>
 
           <div className="border-t border-earth/10 pt-8">
-            <p className="label mb-4">Photomosaic</p>
             <PhotoMosaic />
           </div>
 
           <div className="border-t border-earth/10 pt-8">
-            <p className="label mb-4">Music tree</p>
             <MusicTree />
           </div>
 
