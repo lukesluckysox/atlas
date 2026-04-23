@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, differenceInCalendarDays, formatDistanceToNowStrict } from "date-fns";
 import toast from "react-hot-toast";
 import { Pencil, Check } from "lucide-react";
+import { submitWithQueue } from "@/lib/offline-submit";
 
 interface EchoRef {
   id: string;
@@ -54,17 +55,26 @@ export function EncounterView() {
     if (!today) return;
     setResponding(true);
     try {
-      const res = await fetch("/api/encounter", {
+      const res = await submitWithQueue({
+        kind: "encounter",
+        endpoint: "/api/encounter",
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: today.id, ...payload }),
+        payload: { id: today.id, ...payload },
       });
-      if (!res.ok) throw new Error("save failed");
-      const updated = await res.json();
-      setToday(updated);
-      return updated;
-    } catch {
-      toast.error("Could not save.");
+      if (res.ok && !res.offline) {
+        const updated = (res as { data: Encounter }).data;
+        setToday(updated);
+        return updated;
+      }
+      if (res.ok && res.offline) {
+        // Optimistically update the UI so the user sees their answer,
+        // even though it hasn't synced yet.
+        const optimistic = { ...today, ...payload } as Encounter;
+        setToday(optimistic);
+        toast("saved offline — syncing when back online", { icon: "☁" });
+        return optimistic;
+      }
+      toast.error(res.error || "Could not save.");
     } finally {
       setResponding(false);
     }

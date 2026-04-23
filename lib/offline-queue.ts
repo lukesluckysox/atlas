@@ -25,7 +25,7 @@ export type QueueItem = {
   id: string;
   kind: QueueKind;
   endpoint: string; // e.g. "/api/marks"
-  method: "POST";
+  method: "POST" | "PATCH";
   // Serializable payload that will go to endpoint as JSON.
   payload: Record<string, unknown>;
   // Zero-or-more pending image uploads to do BEFORE the POST.
@@ -64,15 +64,15 @@ function newId(): string {
 }
 
 export async function enqueue(
-  item: Omit<QueueItem, "id" | "createdAt" | "attempts" | "method">
+  item: Omit<QueueItem, "id" | "createdAt" | "attempts"> & { method?: "POST" | "PATCH" }
 ): Promise<QueueItem> {
   const db = await getDB();
   const full: QueueItem = {
+    ...item,
     id: newId(),
     createdAt: Date.now(),
     attempts: 0,
-    method: "POST",
-    ...item,
+    method: item.method ?? "POST",
   };
   await db.put(STORE, full);
   emitChange();

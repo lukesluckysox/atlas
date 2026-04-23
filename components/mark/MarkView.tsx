@@ -5,6 +5,7 @@ import Image from "next/image";
 import toast from "react-hot-toast";
 import { Camera, MapPin, X, Pencil, Trash2, Check } from "lucide-react";
 import { sampleFileMood } from "@/lib/photo-mood";
+import { submitWithQueue } from "@/lib/offline-submit";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { TraceMeta } from "@/components/ui/TraceMeta";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -27,6 +28,8 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const [content, setContent] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  // Keep the raw file around so we can queue it if the user is offline.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoMood, setPhotoMood] = useState<{ lum: number; warmth: number } | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
@@ -96,11 +99,14 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPhotoFile(file);
     sampleFileMood(file).then((mood) => setPhotoMood(mood));
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64 = ev.target?.result as string;
       setPhotoUrl(base64);
+      // Don't block save if we're offline — the blob goes on the queue.
+      if (navigator.onLine === false) return;
       setUploading(true);
       try {
         const res = await fetch("/api/upload", {
@@ -109,9 +115,9 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
           body: JSON.stringify({ image: base64, folder: "atlas/marks" }),
         });
         const data = await res.json();
-        setUploadedPhotoUrl(data.url);
+        if (data.url) setUploadedPhotoUrl(data.url);
       } catch {
-        toast.error("Photo upload failed.");
+        // Silent — save will queue the blob instead.
       } finally {
         setUploading(false);
       }
@@ -122,35 +128,45 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   const handleSave = async () => {
     if (!content.trim()) return;
     setSaving(true);
-    const mark = await save.run(async () => {
-      const res = await fetch("/api/marks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: content.trim(),
-          photoUrl: uploadedPhotoUrl ?? undefined,
-          latitude: location?.lat,
-          longitude: location?.lng,
-          photoLum: photoMood?.lum,
-          photoWarmth: photoMood?.warmth,
-        }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      return res.json();
+    const res = await submitWithQueue({
+      kind: "moment",
+      endpoint: "/api/marks",
+      payload: {
+        content: content.trim(),
+        photoUrl: uploadedPhotoUrl ?? undefined,
+        latitude: location?.lat,
+        longitude: location?.lng,
+        photoLum: photoMood?.lum,
+        photoWarmth: photoMood?.warmth,
+      },
+      // If we have a file but no uploaded URL, queue the blob for later upload.
+      images:
+        !uploadedPhotoUrl && photoFile
+          ? [{ payloadField: "photoUrl", folder: "atlas/marks", blob: photoFile }]
+          : [],
     });
     setSaving(false);
-    if (mark) {
+    if (res.ok && !res.offline) {
+      const mark = (res as { data: Mark }).data;
       setMarks([mark, ...marks]);
-      setContent("");
-      setPhotoUrl(null);
-      setUploadedPhotoUrl(null);
-      setPhotoMood(null);
-      setLocation(null);
-      setLocationLabel(null);
-      textRef.current?.focus();
+      resetForm();
+    } else if (res.ok && res.offline) {
+      toast.success("saved offline — syncing when back online");
+      resetForm();
     } else {
-      toast.error("Could not save.");
+      toast.error(res.error || "Could not save.");
     }
+  };
+
+  const resetForm = () => {
+    setContent("");
+    setPhotoUrl(null);
+    setUploadedPhotoUrl(null);
+    setPhotoFile(null);
+    setPhotoMood(null);
+    setLocation(null);
+    setLocationLabel(null);
+    textRef.current?.focus();
   };
 
   const beginEdit = (mark: Mark) => {
@@ -268,7 +284,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
               </div>
             )}
             <button
-              onClick={() => { setPhotoUrl(null); setUploadedPhotoUrl(null); }}
+              onClick={() => { setPhotoUrl(null); setUploadedPhotoUrl(null); setPhotoFile(null); }}
               className="absolute top-2 right-2 bg-earth text-parchment p-1"
             >
               <X size={12} />

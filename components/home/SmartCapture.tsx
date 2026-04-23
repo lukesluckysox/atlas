@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Camera, MapPin, Image as ImageIcon } from "lucide-react";
+import { submitWithQueue } from "@/lib/offline-submit";
 
 // Single input on Home that infers the trace kind from what you give it:
 // - Starts with "@" or includes a place query + picks from suggestions -> Path
@@ -88,10 +89,10 @@ export function SmartCapture() {
       if (detected === "track" && nowPlaying) {
         // Track capture uses the paired endpoint. Photo optional; falls back
         // to album art via the API's quick path.
-        const res = await fetch("/api/pairings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const res = await submitWithQueue({
+          kind: "track",
+          endpoint: "/api/pairings",
+          payload: {
             photoUrl: photo,
             spotifyTrackId: nowPlaying.id,
             trackName: nowPlaying.name,
@@ -101,12 +102,12 @@ export function SmartCapture() {
             latitude: coords?.lat,
             longitude: coords?.lng,
             quick: !photo,
-          }),
+          },
         });
-        if (!res.ok) throw new Error();
-        toast.success("tracked");
+        if (!res.ok) throw new Error(res.error || "save failed");
+        toast.success(res.offline ? "saved offline" : "tracked");
         reset();
-        router.refresh();
+        if (!res.offline) router.refresh();
         return;
       }
 
@@ -123,20 +124,20 @@ export function SmartCapture() {
         setSaving(false);
         return;
       }
-      const res = await fetch("/api/marks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const res = await submitWithQueue({
+        kind: "moment",
+        endpoint: "/api/marks",
+        payload: {
           content: content || "(photo)",
           photoUrl: photo,
           latitude: coords?.lat,
           longitude: coords?.lng,
-        }),
+        },
       });
-      if (!res.ok) throw new Error();
-      toast.success("noted");
+      if (!res.ok) throw new Error(res.error || "save failed");
+      toast.success(res.offline ? "saved offline" : "noted");
       reset();
-      router.refresh();
+      if (!res.offline) router.refresh();
     } catch {
       toast.error("couldn't save");
     } finally {

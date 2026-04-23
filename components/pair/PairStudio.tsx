@@ -8,6 +8,7 @@ import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
 import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { sampleFileMood } from "@/lib/photo-mood";
+import { submitWithQueue } from "@/lib/offline-submit";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Track {
@@ -43,6 +44,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoMood, setPhotoMood] = useState<{ lum: number; warmth: number } | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,6 +63,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setPhotoFile(file);
     // Sample mood in parallel with upload — never blocks.
     sampleFileMood(file).then((mood) => setPhotoMood(mood));
 
@@ -68,6 +71,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
     reader.onload = async (ev) => {
       const base64 = ev.target?.result as string;
       setPhotoUrl(base64);
+      if (navigator.onLine === false) return;
       setUploading(true);
 
       try {
@@ -77,9 +81,9 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
           body: JSON.stringify({ image: base64, folder: "atlas/pairings" }),
         });
         const data = await res.json();
-        setUploadedPhotoUrl(data.url);
+        if (data.url) setUploadedPhotoUrl(data.url);
       } catch {
-        toast.error("Photo upload failed.");
+        // Silent — blob will queue on save.
       } finally {
         setUploading(false);
       }
@@ -141,39 +145,52 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
   };
 
   const handleSave = async () => {
-    if (!uploadedPhotoUrl || !selectedTrack) {
+    if ((!uploadedPhotoUrl && !photoFile) || !selectedTrack) {
       toast.error("Need a photo and a track.");
       return;
     }
     setSaving(true);
-    const result = await save.run(async () => {
-      const res = await fetch("/api/pairings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          photoUrl: uploadedPhotoUrl,
-          spotifyTrackId: selectedTrack.id,
-          trackName: selectedTrack.name,
-          artistName: selectedTrack.artist,
-          albumArt: selectedTrack.albumArt,
-          note: note || undefined,
-          location: location || undefined,
-          photoLum: photoMood?.lum,
-          photoWarmth: photoMood?.warmth,
-        }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      return res.json();
+    const res = await submitWithQueue({
+      kind: "track",
+      endpoint: "/api/pairings",
+      payload: {
+        photoUrl: uploadedPhotoUrl ?? undefined,
+        spotifyTrackId: selectedTrack.id,
+        trackName: selectedTrack.name,
+        artistName: selectedTrack.artist,
+        albumArt: selectedTrack.albumArt,
+        note: note || undefined,
+        location: location || undefined,
+        photoLum: photoMood?.lum,
+        photoWarmth: photoMood?.warmth,
+      },
+      images:
+        !uploadedPhotoUrl && photoFile
+          ? [{ payloadField: "photoUrl", folder: "atlas/pairings", blob: photoFile }]
+          : [],
     });
     setSaving(false);
-    if (!result) {
-      toast.error("Could not save track.");
+    if (!res.ok) {
+      toast.error(res.error || "Could not save track.");
+      return;
+    }
+    if (res.offline) {
+      toast.success("saved offline — syncing when back online");
+      setPhotoUrl(null);
+      setUploadedPhotoUrl(null);
+      setPhotoFile(null);
+      setPhotoMood(null);
+      setSelectedTrack(null);
+      setSearchQuery("");
+      setSearchResults([]);
+      setNote("");
+      setLocation("");
       return;
     }
     // Lands-in-archive sequence: bloom the pair, then park it on the ribbon
     // and reset the form so you can log another one.
     setJustSaved({
-      photoUrl: uploadedPhotoUrl,
+      photoUrl: uploadedPhotoUrl ?? "",
       albumArt: selectedTrack.albumArt,
       trackName: selectedTrack.name,
       artistName: selectedTrack.artist,
@@ -183,6 +200,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
     // Reset the form but keep the ribbon visible.
     setPhotoUrl(null);
     setUploadedPhotoUrl(null);
+    setPhotoFile(null);
     setPhotoMood(null);
     setSelectedTrack(null);
     setSearchQuery("");
@@ -346,6 +364,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
                 onClick={() => {
                   setPhotoUrl(null);
                   setUploadedPhotoUrl(null);
+                  setPhotoFile(null);
                   setPhotoMood(null);
                   setRecommendations([]);
                 }}

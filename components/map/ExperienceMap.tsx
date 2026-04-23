@@ -1,4 +1,5 @@
 "use client";
+import { submitWithQueue } from "@/lib/offline-submit";
 /**
  * Map representation rules (principled, single source of truth):
  *   state   → polygon (amber shade)
@@ -453,23 +454,21 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
       date: form.date || undefined,
       note: form.note || undefined,
     };
-    const result = await save.run(async () => {
-      const res = await fetch("/api/experiences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data: { error?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
-      return data;
+    const res = await submitWithQueue({
+      kind: "path",
+      endpoint: "/api/experiences",
+      payload,
     });
     setSaving(false);
-    if (result) {
+    if (res.ok && !res.offline) {
       toast.success("Noted. Add another.");
       setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
       router.refresh();
+    } else if (res.ok && res.offline) {
+      toast.success("saved offline — syncing when back online");
+      setForm((f) => ({ ...INITIAL_FORM, type: f.type }));
     } else {
-      toast.error("Could not save.");
+      toast.error(res.error || "Could not save.");
     }
   };
 

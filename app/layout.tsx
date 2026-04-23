@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
 import { themeInitScript } from "@/components/theme/ThemeProvider";
+import { OfflineProvider } from "@/components/offline/OfflineProvider";
 
 export const metadata: Metadata = {
   title: "Trace — A portrait of who you are",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           {children}
+          <OfflineProvider />
           <Toaster
             position="bottom-center"
             toastOptions={{

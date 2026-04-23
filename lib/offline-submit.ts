@@ -26,6 +26,7 @@ type SubmitArgs = {
   endpoint: string;
   payload: Record<string, unknown>;
   images?: QueueImage[];
+  method?: "POST" | "PATCH";
 };
 
 type SubmitResult =
@@ -67,9 +68,9 @@ async function runItem(item: QueueItem): Promise<unknown> {
     const url = await uploadImage(img);
     payload[img.payloadField] = url;
   }
-  // 2) POST to the final endpoint.
+  // 2) Hit the final endpoint.
   const res = await fetch(item.endpoint, {
-    method: "POST",
+    method: item.method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -89,11 +90,11 @@ function isOnline(): boolean {
  * enqueue for later. Returns offline:true on queue.
  */
 export async function submitWithQueue(args: SubmitArgs): Promise<SubmitResult> {
-  const { kind, endpoint, payload, images = [] } = args;
+  const { kind, endpoint, payload, images = [], method = "POST" } = args;
 
   // If flagged offline, skip straight to queue.
   if (!isOnline()) {
-    const item = await enqueue({ kind, endpoint, payload, images });
+    const item = await enqueue({ kind, endpoint, payload, images, method });
     return { ok: true, offline: true, queueId: item.id };
   }
 
@@ -103,7 +104,7 @@ export async function submitWithQueue(args: SubmitArgs): Promise<SubmitResult> {
       id: "live",
       kind,
       endpoint,
-      method: "POST",
+      method,
       payload,
       images,
       createdAt: Date.now(),
@@ -117,7 +118,7 @@ export async function submitWithQueue(args: SubmitArgs): Promise<SubmitResult> {
     if (is4xx) {
       return { ok: false, offline: false, error: msg };
     }
-    const item = await enqueue({ kind, endpoint, payload, images });
+    const item = await enqueue({ kind, endpoint, payload, images, method });
     return { ok: true, offline: true, queueId: item.id };
   }
 }
