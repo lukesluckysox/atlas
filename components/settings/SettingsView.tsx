@@ -36,6 +36,31 @@ export function SettingsView({ user }: { user: User }) {
 
   const router = useRouter();
   const [resettingTour, setResettingTour] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+
+  const backfillCoords = async () => {
+    if (backfilling) return;
+    setBackfilling(true);
+    toast("finding missing locations — this can take a minute", { duration: 4000 });
+    try {
+      const res = await fetch("/api/experiences/backfill-coords", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "failed");
+      if (data.updated > 0) {
+        toast.success(`pinned ${data.updated} trace${data.updated === 1 ? "" : "s"}`);
+        router.refresh();
+      } else if (data.checked === 0) {
+        toast("all traces already pinned");
+      } else {
+        toast(`couldn't resolve ${data.skipped} — try again or pin manually`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg);
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const resetOnboarding = async () => {
     if (resettingTour) return;
@@ -127,6 +152,16 @@ export function SettingsView({ user }: { user: User }) {
             </Link>
             <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
               JSON backup or printable record — your copy to keep.
+            </p>
+            <button
+              onClick={backfillCoords}
+              disabled={backfilling}
+              className="btn-secondary w-full disabled:opacity-50"
+            >
+              {backfilling ? "Finding locations…" : "Pin missing traces on the map"}
+            </button>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/40">
+              Looks up venue + city for traces without coordinates.
             </p>
           </div>
         </section>

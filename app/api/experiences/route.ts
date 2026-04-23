@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { lookupBoundary } from "@/lib/boundaries";
 import { fetchWeather } from "@/lib/weather";
 import { makeShareSlug } from "@/lib/share";
+import { geocode } from "@/lib/geocode";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
     type,
     name,
     location,
+    venue,
+    city,
     latitude,
     longitude,
     date,
@@ -61,13 +64,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Geocode fallback — if the client didn't drop a pin, resolve one from
+  // the text fields so the entry actually shows on the map. Try the most
+  // specific label first (venue alone), then narrow with city, then city
+  // only. Concert venues are almost always globally unique.
+  let lat = typeof latitude === "number" ? latitude : null;
+  let lng = typeof longitude === "number" ? longitude : null;
+  if (lat == null || lng == null) {
+    const queries: string[] = [];
+    const add = (q?: string | null) => {
+      const v = (q ?? "").trim();
+      if (v && !queries.includes(v)) queries.push(v);
+    };
+    add(venue);
+    if (venue && city) add(`${venue}, ${city}`);
+    add(location);
+    add(city);
+    add(name);
+    for (const q of queries) {
+      const hit = await geocode(q);
+      if (hit) {
+        lat = hit.lat;
+        lng = hit.lng;
+        break;
+      }
+    }
+  }
+
   // For state/country entries, resolve a boundary polygon at log time so the
   // map can shade the region. Null is fine if we can't match the name.
   const boundary = lookupBoundary(type, name);
 
   // Passive weather + moon for the date of the experience (or now if undated).
   const weatherAt = date ? new Date(date) : new Date();
-  const weather = await fetchWeather(latitude, longitude, weatherAt);
+  const weather = await fetchWeather(lat, lng, weatherAt);
 
   const experience = await prisma.experience.create({
     data: {
@@ -75,8 +105,8 @@ export async function POST(req: NextRequest) {
       type,
       name,
       location,
-      latitude,
-      longitude,
+      latitude: lat ?? undefined,
+      longitude: lng ?? undefined,
       date: date ? new Date(date) : undefined,
       note,
       photoUrl,

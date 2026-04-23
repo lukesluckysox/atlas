@@ -444,6 +444,10 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
       type: form.type,
       name,
       location: location || undefined,
+      // Send venue + city separately so the server can try venue-only
+      // geocoding first (venues are usually globally unique).
+      venue: form.type === "concert" ? form.venue.trim() || undefined : undefined,
+      city: form.type === "concert" ? form.city.trim() || undefined : undefined,
       latitude: form.latitude ?? undefined,
       longitude: form.longitude ?? undefined,
       date: form.date || undefined,
