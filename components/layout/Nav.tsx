@@ -171,8 +171,8 @@ export function Nav() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            {/* Quiet streak badge — hides itself when streak is 0 */}
-            <StreakBadge />
+            {/* Streak badge moved into the account dropdown — it's ambient
+                info, not an action, and the top bar stays lighter without it. */}
 
             {/* Theme toggle */}
             <button
@@ -233,6 +233,7 @@ export function Nav() {
                           Free
                         </span>
                       )}
+                      <StreakBadge />
                     </div>
                   </div>
 
@@ -331,6 +332,9 @@ export function Nav() {
                     {user.email}
                   </p>
                 )}
+                <div className="mt-3">
+                  <StreakBadge />
+                </div>
               </div>
               <button
                 onClick={toggle}

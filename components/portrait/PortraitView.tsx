@@ -4,6 +4,8 @@ import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { RefreshCw, Compass, Share2 } from "lucide-react";
 import { PhotoMosaic } from "./PhotoMosaic";
+// MusicTree import preserved for easy re-enable — hidden in the JSX below.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { MusicTree } from "./MusicTree";
 import { ShareDialog } from "./ShareDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -176,9 +178,13 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
             <PhotoMosaic />
           </div>
 
+          {/* Music Tree temporarily hidden from the Portrait view while genre
+              clustering stabilizes. Component and /api/portrait/music-tree
+              remain in the codebase — re-enable by uncommenting.
           <div className="border-t border-earth/10 pt-8">
             <MusicTree />
           </div>
+          */}
 
           <div className="border-t border-earth/10 pt-8">
             <div className="grid grid-cols-4 gap-4">
