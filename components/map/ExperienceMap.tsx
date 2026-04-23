@@ -180,8 +180,26 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
 
   // Shared selection: clicking a list row opens the pin; clicking a pin
   // highlights the row and scrolls it into view.
+  //
+  // flyToKey is bumped (with the target id) only when we explicitly want
+  // the camera to move — drawer row clicks, focus deep-links, etc. Marker
+  // clicks from the map itself do NOT set this, so the popup card just
+  // appears in place without the map jumping around.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [flyToKey, setFlyToKey] = useState<{ id: string; nonce: number } | null>(
+    null
+  );
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Select + fly. Used by the Recent drawer rows so clicking a row both
+  // opens its popup and moves the camera to it. Nonce forces re-fire when
+  // the same row is clicked twice in a row.
+  const selectAndFly = (id: string | null) => {
+    setSelectedId(id);
+    if (id) {
+      setFlyToKey((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
+    }
+  };
 
   useEffect(() => {
     if (!selectedId) return;
@@ -613,6 +631,7 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
               experiences={geoExperiences}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              flyToKey={flyToKey}
               draftMarker={
                 form.latitude != null && form.longitude != null && !selectedId
                   ? {
@@ -881,7 +900,11 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
                         }}
                         onClick={() => {
                           if (!hasGeo) return;
-                          setSelectedId(isSelected ? null : exp.id);
+                          if (isSelected) {
+                            setSelectedId(null);
+                          } else {
+                            selectAndFly(exp.id);
+                          }
                         }}
                         className={`group flex items-center gap-3 px-4 py-3 border-b border-earth/5 last:border-b-0 transition-colors ${
                           hasGeo ? "cursor-pointer" : ""
