@@ -70,7 +70,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
             { label: "Tracks", count: dataCount.pairingCount, needed: 3 },
             { label: "Paths", count: dataCount.experienceCount, needed: 3 },
             { label: "Encounters", count: dataCount.encounterCount, needed: 3 },
-            { label: "Notices", count: dataCount.markCount, needed: 0 },
+            { label: "Moments", count: dataCount.markCount, needed: 0 },
           ].map((item) => (
             <div key={item.label} className="border border-earth/10 p-4">
               <p className="font-serif text-2xl text-earth mb-1">{item.count}</p>
@@ -163,7 +163,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
 
             {!!portrait.markProfile && (
               <ProfileSection
-                title="Notice"
+                title="Moments"
                 data={portrait.markProfile as Record<string, unknown>}
                 fields={[
                   { key: "observationStyle", label: "Observation style" },
@@ -192,7 +192,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
                 { label: "Tracks", count: dataCount.pairingCount },
                 { label: "Paths", count: dataCount.experienceCount },
                 { label: "Encounters", count: dataCount.encounterCount },
-                { label: "Notices", count: dataCount.markCount },
+                { label: "Moments", count: dataCount.markCount },
               ].map((item) => (
                 <div key={item.label}>
                   <p className="font-serif text-2xl text-earth">{item.count}</p>

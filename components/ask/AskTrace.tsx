@@ -17,7 +17,7 @@ interface AskResult {
 const KIND_LABEL: Record<Citation["kind"], string> = {
   tracks: "Tracks",
   path: "Path",
-  notice: "Notice",
+  notice: "Moment",
   encounter: "Encounter",
 };
 

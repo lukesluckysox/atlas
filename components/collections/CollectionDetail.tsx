@@ -33,7 +33,7 @@ interface Detail {
 const KIND_LABEL: Record<Item["kind"], string> = {
   tracks: "Tracks",
   path: "Path",
-  notice: "Notice",
+  notice: "Moment",
   encounter: "Encounter",
 };
 

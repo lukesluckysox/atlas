@@ -8,6 +8,7 @@ import { sampleFileMood } from "@/lib/photo-mood";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { TraceMeta } from "@/components/ui/TraceMeta";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface Mark {
   id: string;
@@ -229,7 +230,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-page-in">
       <PageHeader
-        label="Notice"
+        label="Moments"
         h1="What you noticed."
         tagline="One line, maybe a photo. The app reads it back as a keyword."
         right={<SaveChip state={save.state} onRetry={save.retry} />}
@@ -300,7 +301,7 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
               disabled={saving || !content.trim()}
               className="btn-primary text-xs px-4 py-2 disabled:opacity-40"
             >
-              {saving ? "..." : "Notice"}
+              {saving ? "..." : "Mark it"}
             </button>
           </div>
         </div>
@@ -470,9 +471,10 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
         })}
 
         {marks.length === 0 && (
-          <p className="font-mono text-xs text-earth/30 py-8">
-            Nothing marked yet.
-          </p>
+          <EmptyState
+            headline="Nothing here yet."
+            hint="Notice one thing. Write it down."
+          />
         )}
       </div>
     </div>

@@ -221,7 +221,7 @@ export function HomeDashboard({
       {recentMarks.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-6">
-            <p className="label">Recent notices</p>
+            <p className="label">Recent moments</p>
             <Link
               href="/mark"
               className="font-mono text-xs text-earth/40 hover:text-earth transition-colors"

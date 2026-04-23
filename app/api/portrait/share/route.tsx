@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
             { label: "Tracks", value: tracks },
             { label: "Paths", value: paths },
             { label: "Encounters", value: encounters },
-            { label: "Notices", value: notices },
+            { label: "Moments", value: notices },
           ].map((c) => (
             <div
               key={c.label}

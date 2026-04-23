@@ -43,7 +43,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   beach: "Beach",
   peak: "Peak",
   landmark: "Landmark",
-  notice: "Notice",
+  notice: "Moment",
 };
 
 // Categories kept visible at mid zoom. Everything else fades to tiny pips.

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Camera } from "lucide-react";
 import { sampleUrlMood, moodReading, narrateMoods } from "@/lib/photo-mood";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 /**
  * Compass portrait — a single, authored view of your photo pool.
@@ -115,13 +116,13 @@ export function PhotoMosaic() {
 
   if (!tiles || tiles.length === 0) {
     return (
-      <div className="border border-earth/10 p-16 text-center">
-        <Camera size={24} className="text-amber/60 mx-auto mb-6" />
-        <p className="font-mono text-sm text-earth/60 mb-2">No photos yet.</p>
-        <p className="font-mono text-xs text-earth/40 leading-relaxed max-w-sm mx-auto">
-          Pair a photo with a track, log a path with an image, or leave a notice.
-          Your compass takes shape as you add.
-        </p>
+      <div className="border border-earth/10 text-center">
+        <Camera size={24} className="text-amber/60 mx-auto mt-10 mb-2" />
+        <EmptyState
+          headline="No photos yet."
+          hint="Pair a photo with a track, log a path, or mark a moment."
+          compact
+        />
       </div>
     );
   }

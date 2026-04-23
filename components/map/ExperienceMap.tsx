@@ -50,7 +50,10 @@ const EXPERIENCE_TYPES = [
   { value: "peak", label: "Peak", icon: Triangle, color: "#6B6B6B" },
   { value: "landmark", label: "Landmark", icon: LandmarkIcon, color: "#8B6F3F" },
   { value: "moment", label: "Moment", icon: MapPin, color: "#E8C47A" },
-  { value: "notice", label: "Notice", icon: MapPin, color: "#C17F5A" },
+  // Internal “notice” kind — surfaced on the map as a distinct filter from the
+  // “moment” experience type (which is an Experience row). Labeled “Note” on
+  // the map legend to avoid collision with the nav-level “Moments” word.
+  { value: "notice", label: "Note", icon: MapPin, color: "#C17F5A" },
   { value: "road", label: "Road", icon: Route, color: "#D4A843" },
 ];
 
@@ -63,7 +66,7 @@ const FILTER_GROUPS: { value: "places" | "moments" | "notices" | "roads"; label:
     types: ["country", "national_park", "state", "trail", "restaurant", "stadium", "beach", "peak", "landmark"],
   },
   { value: "moments", label: "Moments", types: ["concert", "moment"] },
-  { value: "notices", label: "Notices", types: ["notice"] },
+  { value: "notices", label: "Notes", types: ["notice"] },
   { value: "roads", label: "Roads", types: ["road"] },
 ];
 
@@ -525,7 +528,7 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
       <PageHeader
-        label="Path"
+        label="Paths"
         h1="Where you&rsquo;ve been."
         tagline="Countries, parks, concerts, trails, roads. A map of what it was."
         right={

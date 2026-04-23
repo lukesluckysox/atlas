@@ -63,7 +63,7 @@ const KIND_META: Record<
 > = {
   tracks: { label: "Tracks", Icon: Music2 },
   path: { label: "Path", Icon: MapPin },
-  notice: { label: "Notice", Icon: Eye },
+  notice: { label: "Moment", Icon: Eye },
   encounter: { label: "Encounter", Icon: HelpCircle },
 };
 
