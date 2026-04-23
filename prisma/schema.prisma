@@ -115,13 +115,20 @@ model Experience {
 }
 
 model Encounter {
-  id       String   @id @default(cuid())
-  userId   String
-  question String
-  answer   String?  @db.Text
-  landed   Boolean?
-  date     DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id])
+  id          String   @id @default(cuid())
+  userId      String
+  question    String
+  answer      String?  @db.Text
+  landed      Boolean?
+  // True when the user explicitly chose to sit with the question rather than
+  // marking it landed/didn't-land. Distinct from landed=null (unanswered).
+  sittingWith Boolean  @default(false)
+  // Optional pointer to a past encounter whose question this one echoes.
+  // Set once on creation by the AI; stable thereafter. Not a FK — soft ref
+  // so deletes don't cascade.
+  echoOfId    String?
+  date        DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model Portrait {

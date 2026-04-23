@@ -1,14 +1,24 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { format, differenceInCalendarDays } from "date-fns";
+import { format, differenceInCalendarDays, formatDistanceToNowStrict } from "date-fns";
 import toast from "react-hot-toast";
 import { Pencil, Check } from "lucide-react";
+
+interface EchoRef {
+  id: string;
+  question: string;
+  answer: string | null;
+  date: string;
+}
 
 interface Encounter {
   id: string;
   question: string;
   answer: string | null;
   landed: boolean | null;
+  sittingWith: boolean;
+  echoOfId: string | null;
+  echo?: EchoRef | null;
   date: string;
 }
 
@@ -39,6 +49,7 @@ export function EncounterView() {
   const patch = async (payload: {
     landed?: boolean | null;
     answer?: string | null;
+    sittingWith?: boolean;
   }) => {
     if (!today) return;
     setResponding(true);
@@ -79,6 +90,22 @@ export function EncounterView() {
     await patch(payload);
   };
 
+  const markSittingWith = async () => {
+    const pendingAnswer = answer.trim();
+    const currentAnswer = today?.answer ?? "";
+    const payload: { sittingWith: true; answer?: string } = { sittingWith: true };
+    if (pendingAnswer && pendingAnswer !== currentAnswer) {
+      payload.answer = pendingAnswer;
+    }
+    await patch(payload);
+  };
+
+  const clearResolution = async () => {
+    // Used by the "change" link under any resolution status. Resets to
+    // unresolved so they can pick again.
+    await patch({ landed: null, sittingWith: false });
+  };
+
   // Past encounters by age bucket + calendar-day match
   const { rail, onThisDay } = useMemo(() => {
     const now = new Date();
@@ -111,7 +138,14 @@ export function EncounterView() {
     );
   }
 
-  const hasLanded = today?.landed === true || today?.landed === false;
+  const landedSet = today?.landed === true || today?.landed === false;
+  const isSitting = today?.sittingWith === true;
+  const isResolved = landedSet || isSitting;
+
+  let statusLabel = "";
+  if (today?.landed === true) statusLabel = "Landed.";
+  else if (today?.landed === false) statusLabel = "Didn't land.";
+  else if (isSitting) statusLabel = "Sitting with it.";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -129,9 +163,26 @@ export function EncounterView() {
 
           {today && (
             <>
-              <blockquote className="font-serif text-2xl md:text-3xl lg:text-4xl text-earth leading-[1.15] mb-12">
+              <blockquote className="font-serif text-2xl md:text-3xl lg:text-4xl text-earth leading-[1.15] mb-8">
                 {today.question}
               </blockquote>
+
+              {/* Echo surface — when this question rhymes with a past one. */}
+              {today.echo && (
+                <div className="mb-12 text-left border-l-2 border-amber/60 pl-5 py-3 bg-amber/5">
+                  <p className="font-mono text-[11px] text-earth/40 uppercase tracking-wider mb-2">
+                    Echoes a question from {formatDistanceToNowStrict(new Date(today.echo.date), { addSuffix: true })}
+                  </p>
+                  <p className="font-serif text-base text-earth/85 leading-snug mb-2">
+                    {today.echo.question}
+                  </p>
+                  {today.echo.answer && (
+                    <p className="font-serif text-sm text-earth/60 italic leading-relaxed">
+                      {today.echo.answer}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Response area */}
               <div className="mb-10 text-left">
@@ -195,9 +246,9 @@ export function EncounterView() {
                 )}
               </div>
 
-              {/* Landed / Didn't land */}
-              {!hasLanded ? (
-                <div className="flex gap-4 justify-center">
+              {/* Resolution: Landed / Didn't land / Sit with it */}
+              {!isResolved ? (
+                <div className="flex flex-wrap gap-3 justify-center">
                   <button
                     onClick={() => markLanded(true)}
                     disabled={responding}
@@ -212,16 +263,19 @@ export function EncounterView() {
                   >
                     Didn&rsquo;t land
                   </button>
+                  <button
+                    onClick={markSittingWith}
+                    disabled={responding}
+                    className="btn-secondary disabled:opacity-40"
+                  >
+                    Sit with it
+                  </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-3">
-                  <p className="font-mono text-sm text-earth/50">
-                    {today.landed ? "Landed." : "Didn't land."}
-                  </p>
+                  <p className="font-mono text-sm text-earth/50">{statusLabel}</p>
                   <button
-                    onClick={() =>
-                      patch({ landed: !today.landed })
-                    }
+                    onClick={clearResolution}
                     disabled={responding}
                     className="font-mono text-xs text-earth/30 hover:text-earth underline"
                   >
@@ -282,32 +336,40 @@ export function EncounterView() {
         <div className="border-t border-earth/10 px-8 py-12 max-w-2xl mx-auto w-full">
           <p className="label mb-8">Past questions</p>
           <div className="space-y-8">
-            {history.slice(0, 10).map((enc) => (
-              <div key={enc.id} className="flex items-start gap-8">
-                <div className="shrink-0 text-right w-16">
-                  <p className="font-mono text-xs text-earth/30">
-                    {format(new Date(enc.date), "MMM d")}
-                  </p>
-                  <span
-                    className={`font-mono text-xs ${
-                      enc.landed ? "text-amber" : "text-earth/20"
-                    }`}
-                  >
-                    {enc.landed ? "✓" : "—"}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-mono text-sm text-earth/60 leading-relaxed">
-                    {enc.question}
-                  </p>
-                  {enc.answer && (
-                    <p className="font-serif text-sm text-earth/80 italic leading-relaxed mt-2 pl-3 border-l border-amber/30">
-                      {enc.answer}
+            {history.slice(0, 10).map((enc) => {
+              const mark = enc.landed
+                ? "✓"
+                : enc.sittingWith
+                  ? "~"
+                  : enc.landed === false
+                    ? "—"
+                    : "·";
+              const markClass = enc.landed
+                ? "text-amber"
+                : enc.sittingWith
+                  ? "text-sage"
+                  : "text-earth/20";
+              return (
+                <div key={enc.id} className="flex items-start gap-8">
+                  <div className="shrink-0 text-right w-16">
+                    <p className="font-mono text-xs text-earth/30">
+                      {format(new Date(enc.date), "MMM d")}
                     </p>
-                  )}
+                    <span className={`font-mono text-xs ${markClass}`}>{mark}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-sm text-earth/60 leading-relaxed">
+                      {enc.question}
+                    </p>
+                    {enc.answer && (
+                      <p className="font-serif text-sm text-earth/80 italic leading-relaxed mt-2 pl-3 border-l border-amber/30">
+                        {enc.answer}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

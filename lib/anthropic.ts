@@ -244,6 +244,70 @@ ${trimmed.slice(0, 500)}
 }
 
 // ---------------------------------------------------------------------------
+// Encounter echo picker — thread today's question to a past one
+// ---------------------------------------------------------------------------
+
+/**
+ * Given a new encounter question and a list of past questions the user has
+ * encountered, return the id of the single past question that most strongly
+ * echoes the new one — or null if none are similar enough.
+ *
+ * Fails graceful: returns null on any error, on empty input, or when Claude
+ * can't confidently pick an echo. Never invents an id.
+ */
+export async function pickEncounterEcho(
+  newQuestion: string,
+  past: Array<{ id: string; question: string }>
+): Promise<string | null> {
+  if (!newQuestion.trim() || past.length === 0) return null;
+
+  // Cap to the 50 most recent past questions so the prompt stays small.
+  const candidates = past.slice(0, 50);
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 80,
+      messages: [
+        {
+          role: "user",
+          content: `${TRACE_VOICE}
+
+You are picking the single past question that most strongly echoes a new one. Echo means: same underlying preoccupation, not same surface words. Prefer thematic resonance over wording.
+
+Rules:
+- If no past question genuinely echoes, return "null".
+- Do not force a match. The bar is high — most new questions will not echo.
+- Return a single JSON object, nothing else.
+
+New question:
+"""
+${newQuestion.slice(0, 400)}
+"""
+
+Past questions:
+${candidates.map((c, i) => `${i + 1}. [id=${c.id}] ${c.question.slice(0, 200)}`).join("\n")}
+
+Return JSON: {"id": "<past id>"} or {"id": null}.`,
+        },
+      ],
+    });
+
+    const c = response.content[0];
+    if (c.type !== "text") return null;
+    const match = c.text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]);
+    if (typeof parsed.id !== "string") return null;
+    // Guard: only return an id that actually exists in the candidates.
+    const allowed = new Set(candidates.map((x) => x.id));
+    return allowed.has(parsed.id) ? parsed.id : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Pairing caption — photo + song pairing "read"
 // ---------------------------------------------------------------------------
 
