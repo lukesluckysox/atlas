@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import { Check } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface User {
   name?: string | null;
@@ -53,10 +54,11 @@ export function SettingsView({ user }: { user: User }) {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-12">
-        <p className="label mb-2">Settings</p>
-        <h1 className="font-serif text-4xl text-earth">Account</h1>
-      </div>
+      <PageHeader
+        label="Settings"
+        h1="Account"
+        tagline="Your profile, plan, and data."
+      />
 
       <div className="space-y-12">
         <section>
@@ -97,7 +99,7 @@ export function SettingsView({ user }: { user: User }) {
               <p className="font-serif text-xl text-earth mb-6">$8 / month</p>
               <ul className="space-y-3 mb-8">
                 {[
-                  "Unlimited experiences",
+                  "Unlimited paths",
                   "AI track recommendations for photos",
                   "Personality portrait generation",
                   "Shareable portrait export",

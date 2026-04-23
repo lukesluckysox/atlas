@@ -86,7 +86,7 @@ export function MusicTree() {
       <div className="flex items-center justify-between border-b border-earth/10 px-4 py-3">
         <p className="label">Music tree</p>
         <p className="font-mono text-xs text-earth/30">
-          {data.totalPairings} pairing{data.totalPairings === 1 ? "" : "s"} ·{" "}
+          {data.totalPairings} track{data.totalPairings === 1 ? "" : "s"} ·{" "}
           {data.totalArtists} artist{data.totalArtists === 1 ? "" : "s"}
         </p>
       </div>

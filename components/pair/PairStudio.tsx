@@ -8,6 +8,7 @@ import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
 import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { sampleFileMood } from "@/lib/photo-mood";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Track {
   id: string;
@@ -166,7 +167,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
     });
     setSaving(false);
     if (!result) {
-      toast.error("Could not save pairing.");
+      toast.error("Could not save track.");
       return;
     }
     // Lands-in-archive sequence: bloom the pair, then park it on the ribbon
@@ -245,18 +246,12 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
         </div>
       )}
 
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <p className="label mb-2">Tracks</p>
-          <h1 className="font-serif text-4xl text-earth">New pairing</h1>
-          <p className="font-mono text-xs text-earth/40 mt-2">
-            A photo. A track. Pure instinct.
-          </p>
-        </div>
-        <div className="pt-1">
-          <SaveChip state={save.state} onRetry={save.retry} />
-        </div>
-      </div>
+      <PageHeader
+        label="Tracks"
+        h1="A photo. A track."
+        tagline="Pure instinct. The app reads it back as a caption."
+        right={<SaveChip state={save.state} onRetry={save.retry} />}
+      />
 
       {/* Lands-in-archive ribbon — shows the new pairing riding on top of the archive */}
       {ribbonItems.length > 0 && (
@@ -527,7 +522,7 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
           disabled={saving || !uploadedPhotoUrl || !selectedTrack}
           className="btn-primary disabled:opacity-40"
         >
-          {saving ? "Saving..." : "Save pairing"}
+          {saving ? "Saving..." : "Save track"}
         </button>
       </div>
     </div>

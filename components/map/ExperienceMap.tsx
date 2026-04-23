@@ -1,4 +1,14 @@
 "use client";
+/**
+ * Map representation rules (principled, single source of truth):
+ *   state   → polygon (amber shade)
+ *   country → polygon
+ *   city    → pin
+ *   road    → polyline
+ * Pins are reserved for point-in-space entries. Polygons are reserved for
+ * regions. Polylines are reserved for routes. Do not add exceptions without
+ * updating this comment.
+ */
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
@@ -23,6 +33,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { searchHighways, type HighwayOption } from "@/lib/highways";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false });
 
@@ -512,25 +523,23 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 animate-page-in">
-      <div className="flex items-end justify-between mb-8">
-        <div>
-          <p className="label mb-2">Path</p>
-          <h1 className="font-serif text-4xl text-earth">Life map</h1>
-          <p className="font-mono text-xs text-earth/40 mt-2">
-            Where you&rsquo;ve been. What it was.
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={14} />
-          Log
-        </button>
-      </div>
+      <PageHeader
+        label="Path"
+        h1="Where you&rsquo;ve been."
+        tagline="Countries, parks, concerts, trails, roads. A map of what it was."
+        right={
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={14} />
+            Log
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-earth/10 mb-8">
         {[
@@ -907,7 +916,7 @@ function LogPanel({
     <div className="border border-earth/10 bg-parchment h-full overflow-y-auto">
       <div className="px-5 py-4 border-b border-earth/10 flex items-center justify-between gap-3">
         <div>
-          <p className="label">Log experience</p>
+          <p className="label">Log a path</p>
           <p className="font-mono text-[10px] text-earth/40 mt-0.5">
             Drawer stays open — log as many as you want.
           </p>

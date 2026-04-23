@@ -117,8 +117,11 @@ export function EncounterView() {
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-24">
         <div className="max-w-xl w-full text-center animate-fade-in">
-          <h1 className="font-serif text-4xl md:text-5xl text-earth mb-2">Encounter</h1>
-          <p className="font-mono text-xs text-earth/40 mb-12">One question. Every day. Yours to sit with.</p>
+          <p className="label mb-3">Encounter</p>
+          <h1 className="font-serif text-4xl md:text-5xl text-earth mb-2 leading-tight">One question.</h1>
+          <p className="font-mono text-xs text-earth/40 mb-12 leading-relaxed">
+            Every day. Yours to sit with. Mark whether it landed.
+          </p>
           <p className="label mb-12">
             {format(new Date(), "EEEE, MMMM d")} — {new Date().getUTCHours() < 12 ? "Morning" : "Evening"} question.
             No answer required.

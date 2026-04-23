@@ -15,7 +15,7 @@ export default async function LandingPage() {
     {
       id: "01",
       name: "Tracks",
-      description: "Photo and track pairings. Pure instinct. No analysis required.",
+      description: "A photo and a track, side by side. Pure instinct. No analysis required.",
     },
     {
       id: "02",
@@ -77,7 +77,7 @@ export default async function LandingPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/portrait-preview.svg"
-                alt="Sample Trace portrait — the personality profile users generate from their pairings, experiences, encounters, and notices"
+                alt="Sample Trace portrait — the personality profile users generate from their tracks, paths, encounters, and notices"
                 className="w-full h-auto block"
               />
             </div>

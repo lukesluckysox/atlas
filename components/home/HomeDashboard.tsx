@@ -99,7 +99,7 @@ export function HomeDashboard({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-earth/90 via-earth/30 to-transparent" />
             <div className="relative p-6 h-full flex flex-col justify-between min-h-[180px]">
-              <p className="label text-parchment/70">Last pairing</p>
+              <p className="label text-parchment/70">Last track</p>
               <div>
                 <p className="font-serif text-base text-parchment leading-tight truncate">
                   {lastPairing.trackName}
@@ -164,14 +164,14 @@ export function HomeDashboard({
 
       {pairingsToday > 0 && (
         <p className="font-mono text-xs text-earth/40 mb-8 -mt-8">
-          {pairingsToday} {pairingsToday === 1 ? "pairing" : "pairings"} today.
+          {pairingsToday} {pairingsToday === 1 ? "track" : "tracks"} today.
         </p>
       )}
 
       {recentPairings.length > 0 && (
         <div className="mb-16">
           <div className="flex items-center justify-between mb-6">
-            <p className="label">Recent pairings</p>
+            <p className="label">Recent tracks</p>
             <Link
               href="/explore"
               className="font-mono text-xs text-earth/40 hover:text-earth transition-colors"
@@ -216,7 +216,7 @@ export function HomeDashboard({
       {recentMarks.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-6">
-            <p className="label">Recent marks</p>
+            <p className="label">Recent notices</p>
             <Link
               href="/mark"
               className="font-mono text-xs text-earth/40 hover:text-earth transition-colors"

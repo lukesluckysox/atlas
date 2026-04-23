@@ -147,7 +147,7 @@ export function PhotoMosaic() {
             <span
               className={`font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 ${KIND_COLORS[hovered.kind]} text-earth`}
             >
-              {hovered.kind === "mark" ? "notice" : hovered.kind}
+              {hovered.kind === "mark" ? "notice" : hovered.kind === "pairing" ? "tracks" : "path"}
             </span>
             <p className="font-mono text-xs text-earth/70 truncate">{hovered.label}</p>
             {hovered.lum != null && hovered.warmth != null && (

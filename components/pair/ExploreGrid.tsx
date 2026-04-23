@@ -97,14 +97,14 @@ export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[]
         <p className="label mb-2">Tracks</p>
         <h1 className="font-serif text-4xl text-earth">Archive</h1>
         <p className="font-mono text-xs text-earth/40 mt-2 mb-16">
-          Every pairing you&rsquo;ve made. Nothing curated.
+          Every track you&rsquo;ve made. Nothing curated.
         </p>
         <div className="border border-earth/10 p-16 text-center">
           <p className="font-mono text-sm text-earth/40">
             Nothing here yet. Go somewhere. Hear something.
           </p>
           <Link href="/pair" className="btn-primary inline-block mt-8">
-            First pairing
+            First track
           </Link>
         </div>
       </div>
@@ -118,7 +118,7 @@ export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[]
           <p className="label mb-2">Tracks</p>
           <h1 className="font-serif text-4xl text-earth">Archive</h1>
           <p className="font-mono text-xs text-earth/40 mt-2">
-            Every pairing you&rsquo;ve made. Nothing curated.
+            Every track you&rsquo;ve made. Nothing curated.
           </p>
         </div>
         <p className="font-mono text-xs text-earth/40">
@@ -159,7 +159,7 @@ export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[]
       {filtered.length === 0 ? (
         <div className="border border-earth/10 p-16 text-center">
           <p className="font-mono text-sm text-earth/40">
-            No pairings in this mood yet.
+            No tracks in this mood yet.
           </p>
         </div>
       ) : (

@@ -7,6 +7,7 @@ import { Camera, MapPin, X, Pencil, Trash2, Check } from "lucide-react";
 import { sampleFileMood } from "@/lib/photo-mood";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { TraceMeta } from "@/components/ui/TraceMeta";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Mark {
   id: string;
@@ -227,18 +228,12 @@ export function MarkView({ initialMarks }: { initialMarks: Mark[] }) {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-12 animate-page-in">
-      <div className="mb-12 flex items-start justify-between gap-4">
-        <div>
-          <p className="label mb-2">Notice</p>
-          <h1 className="font-serif text-4xl text-earth">Capture</h1>
-          <p className="font-mono text-xs text-earth/40 mt-2">
-            What you noticed. One line, maybe a photo.
-          </p>
-        </div>
-        <div className="pt-1">
-          <SaveChip state={save.state} onRetry={save.retry} />
-        </div>
-      </div>
+      <PageHeader
+        label="Notice"
+        h1="What you noticed."
+        tagline="One line, maybe a photo. The app reads it back as a keyword."
+        right={<SaveChip state={save.state} onRetry={save.retry} />}
+      />
 
       <div className="mb-16">
         <textarea

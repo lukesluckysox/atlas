@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { RefreshCw, Compass } from "lucide-react";
 import { PhotoMosaic } from "./PhotoMosaic";
 import { MusicTree } from "./MusicTree";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 interface Portrait {
   id: string;
@@ -62,10 +63,10 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
         </p>
         <div className="grid grid-cols-2 gap-4 text-left mt-12">
           {[
-            { label: "Pairings", count: dataCount.pairingCount, needed: 3 },
-            { label: "Experiences", count: dataCount.experienceCount, needed: 3 },
+            { label: "Tracks", count: dataCount.pairingCount, needed: 3 },
+            { label: "Paths", count: dataCount.experienceCount, needed: 3 },
             { label: "Encounters", count: dataCount.encounterCount, needed: 3 },
-            { label: "Marks", count: dataCount.markCount, needed: 0 },
+            { label: "Notices", count: dataCount.markCount, needed: 0 },
           ].map((item) => (
             <div key={item.label} className="border border-earth/10 p-4">
               <p className="font-serif text-2xl text-earth mb-1">{item.count}</p>
@@ -84,23 +85,21 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12 animate-page-in">
-      <div className="flex items-end justify-between mb-12">
-        <div>
-          <p className="label mb-2">Portrait</p>
-          <h1 className="font-serif text-4xl text-earth">What Trace sees</h1>
-          <p className="font-mono text-xs text-earth/40 mt-2">
-            Light, sound, distance. Your signal.
-          </p>
-        </div>
-        <button
-          onClick={generate}
-          disabled={generating}
-          className="flex items-center gap-2 btn-secondary text-sm disabled:opacity-40"
-        >
-          <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
-          {portrait ? "Regenerate" : "Generate portrait"}
-        </button>
-      </div>
+      <PageHeader
+        label="Portrait"
+        h1="What Trace sees."
+        tagline="Light, sound, and distance, read back from your traces."
+        right={
+          <button
+            onClick={generate}
+            disabled={generating}
+            className="flex items-center gap-2 btn-secondary text-sm disabled:opacity-40"
+          >
+            <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
+            {portrait ? "Regenerate" : "Generate portrait"}
+          </button>
+        }
+      />
 
       {portrait ? (
         <div className="space-y-12">
@@ -130,7 +129,7 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
               fields={[
                 { key: "geographicStyle", label: "Geographic style" },
                 { key: "breadth", label: "Breadth" },
-                { key: "experienceTypes", label: "Experience types", isList: true },
+                { key: "experienceTypes", label: "Path types", isList: true },
               ]}
             />
 
@@ -168,10 +167,10 @@ export function PortraitView({ portrait: initialPortrait, dataCount }: Props) {
           <div className="border-t border-earth/10 pt-8">
             <div className="grid grid-cols-4 gap-4">
               {[
-                { label: "Pairings", count: dataCount.pairingCount },
-                { label: "Experiences", count: dataCount.experienceCount },
+                { label: "Tracks", count: dataCount.pairingCount },
+                { label: "Paths", count: dataCount.experienceCount },
                 { label: "Encounters", count: dataCount.encounterCount },
-                { label: "Marks", count: dataCount.markCount },
+                { label: "Notices", count: dataCount.markCount },
               ].map((item) => (
                 <div key={item.label}>
                   <p className="font-serif text-2xl text-earth">{item.count}</p>

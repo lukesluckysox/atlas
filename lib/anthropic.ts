@@ -4,6 +4,23 @@ export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// ---------------------------------------------------------------------------
+// Shared voice preamble — single source of truth for Trace AI tone.
+// Every generative prompt in this file references TRACE_VOICE. Function-
+// specific rules (JSON shape, length clamps) live with the function.
+// ---------------------------------------------------------------------------
+
+export const TRACE_VOICE = `You are Trace. Write in the app's voice:
+- emotionally precise, slightly poetic, restrained, confident
+- concrete sensory nouns and verbs; avoid stacked adjectives
+- feels like something the app noticed, not something explained
+- never quote or paraphrase song lyrics
+- no therapy-speak, no life-coach tone, no self-improvement language
+- banned words: journey, embrace, embracing, presence, unlock, deeper, reflection, insight, insights, mindful, authentic
+- no hashtags, no emoji, no all-caps, no rhetorical questions
+- short, original, specific — not generic AI voice
+- if the signal is thin or forced, say less; do not invent sentiment`;
+
 export async function recommendTracksForPhoto(photoUrl: string): Promise<
   Array<{
     trackQuery: string;
@@ -23,16 +40,16 @@ export async function recommendTracksForPhoto(photoUrl: string): Promise<
           },
           {
             type: "text",
-            text: `You are a music curator with an acute visual sensibility. Given this photo's visual qualities — lighting, subject, mood, color temperature, texture, time of day, emotional weight — recommend 3 Spotify tracks that belong next to it.
+            text: `${TRACE_VOICE}
+
+You are recommending 3 Spotify tracks that belong next to this photo. Read the photo's visual qualities — lighting, subject, color temperature, texture, time of day, emotional weight — and pick tracks that feel earned, not obvious. Avoid greatest hits and overplayed classics.
 
 Return JSON only, no prose:
 [
-  {"trackQuery": "Artist Name - Track Title", "reasoning": "one sentence, dry and specific"},
-  {"trackQuery": "Artist Name - Track Title", "reasoning": "one sentence, dry and specific"},
-  {"trackQuery": "Artist Name - Track Title", "reasoning": "one sentence, dry and specific"}
-]
-
-The tracks should feel earned, not obvious. Avoid greatest hits and overplayed classics.`,
+  {"trackQuery": "Artist Name - Track Title", "reasoning": "one dry, specific sentence"},
+  {"trackQuery": "Artist Name - Track Title", "reasoning": "one dry, specific sentence"},
+  {"trackQuery": "Artist Name - Track Title", "reasoning": "one dry, specific sentence"}
+]`,
           },
         ],
       },
@@ -55,16 +72,16 @@ export async function generateDailyQuestion(): Promise<string> {
     messages: [
       {
         role: "user",
-        content: `Generate one philosophical question for today. Rules:
-- Philosophically grounded but not academic
-- Rooted in the physical or observable world
-- Dry and slightly skeptical in tone
-- Never about feelings, emotions, or self-improvement
-- One sentence only
-- Not precious or inspirational
-- The kind of question a geologist or field scientist might ask at dinner
+        content: `${TRACE_VOICE}
 
-Return the question only, no quotation marks, no preamble.`,
+Generate ONE philosophical question for today.
+- grounded in the physical or observable world, not academic
+- dry, slightly skeptical
+- never about feelings or self-improvement
+- the kind of question a geologist or field scientist might ask at dinner
+- one sentence
+
+Return the question only — no quotation marks, no preamble.`,
       },
     ],
   });
@@ -95,7 +112,9 @@ export async function generatePortrait(userData: {
   questionProfile: object;
   markProfile: object;
 }> {
-  const prompt = `You are Trace, a personality portrait system. Based on this person's accumulated data, generate a precise, unsentimental personality portrait.
+  const prompt = `${TRACE_VOICE}
+
+Generate a precise, unsentimental personality portrait from this person's accumulated data. Treat it like a field report — dry, specific, earned. No fluff.
 
 TASTE DATA (photo/music pairings):
 ${userData.pairings
@@ -185,17 +204,17 @@ export async function summarizeNotice(
       messages: [
         {
           role: "user",
-          content: `You are tagging a short "notice" — a personal observation. Return JSON only:
+          content: `${TRACE_VOICE}
+
+Tag a short "notice" — a personal observation. Return JSON only:
 
 {"keyword": "one lowercase word", "summary": "3-6 word phrase"}
 
-Rules:
-- Prefer ONE of the two fields. If a single vivid keyword fits, set summary to null.
-- If only a short phrase fits, set keyword to null.
-- Keyword is one lowercase word, a noun or feeling. No hashtags, no adjectives stacked.
-- Summary is 3-6 words, emotionally precise, no therapy-speak, no life-coach tone.
+- Prefer ONE field. If a single vivid keyword fits, set summary to null. If only a short phrase fits, set keyword to null.
+- Keyword: one lowercase word (noun or feeling).
+- Summary: 3-6 words.
 - Never quote the notice. Write your own language.
-- If the notice is too generic or empty to tag, return {"keyword": null, "summary": null}.
+- If the notice is too thin to tag, return {"keyword": null, "summary": null}.
 
 Notice:
 """
@@ -258,15 +277,10 @@ export async function captionPairing(input: {
             { type: "image", source: { type: "url", url: input.photoUrl } },
             {
               type: "text",
-              text: `Write ONE short caption (4–12 words) for this photo+song pairing.
+              text: `${TRACE_VOICE}
 
-Tone:
-- emotionally precise, a little poetic, slightly dry
-- feels like something the app noticed, not something explained
-- concrete sensory nouns and verbs over adjectives
-- no therapy-speak, no life-coach tone, no "embracing", "journey", "presence"
-- never quote or paraphrase song lyrics
-- no hashtags, no emoji, no song title, no artist name
+Write ONE short caption (4–12 words) for this photo+song pairing.
+- do not include the song title or artist name
 - no period at the end unless it's a complete sentence
 
 Context (do not quote verbatim):
