@@ -7,16 +7,16 @@ import { Menu, X, Sun, Moon, ChevronDown, User, Settings, LogOut } from "lucide-
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { StreakBadge } from "@/components/layout/StreakBadge";
 
+// The "Trace" wordmark in the nav is itself a link to /home, so Home is not
+// duplicated as a nav item. Capture lives on the /capture route (reached from
+// home and from kind-native pages) and isn't a top-bar item either.
 const NAV_ITEMS = [
-  { href: "/home", label: "Home" },
-  { href: "/capture", label: "Capture" },
   { href: "/pair", label: "Tracks" },
-  { href: "/map", label: "Path" },
-  { href: "/encounter", label: "Encounter" },
-  { href: "/mark", label: "Notice" },
-  { href: "/archive", label: "Archive" },
-  { href: "/ask", label: "Ask" },
+  { href: "/map", label: "Paths" },
+  { href: "/encounter", label: "Encounters" },
+  { href: "/mark", label: "Moments" },
   { href: "/collections", label: "Collections" },
+  { href: "/archive", label: "Archive" },
   { href: "/portrait", label: "Portrait" },
 ];
 

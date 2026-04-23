@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -28,7 +30,16 @@ export default async function ArchivePage() {
         <PageHeader
           label="Archive"
           h1="Everything you've traced."
-          tagline="Tracks, paths, notices, encounters. One timeline."
+          tagline="Tracks, paths, moments, encounters. One timeline."
+          right={
+            <Link
+              href="/ask"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-earth/70 hover:text-earth border border-earth/20 hover:border-amber hover:text-amber transition-colors px-3 py-1.5"
+            >
+              <Sparkles size={12} />
+              Ask Trace
+            </Link>
+          }
         />
         <ArchiveFeed isPro={!!user?.isPro} />
       </div>
