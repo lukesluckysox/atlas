@@ -37,8 +37,15 @@ export function ShareToTrace({ onApply }: Props) {
       const form = new FormData();
       form.append("file", file);
       const up = await fetch("/api/upload", { method: "POST", body: form });
-      if (!up.ok) throw new Error("upload failed");
-      const { url } = (await up.json()) as { url: string };
+      if (!up.ok) {
+        const txt = await up.text().catch(() => "");
+        throw new Error(`upload ${up.status}: ${txt.slice(0, 200)}`);
+      }
+      const upJson = (await up.json()) as { url?: string };
+      if (!upJson.url) {
+        throw new Error(`upload returned no url: ${JSON.stringify(upJson).slice(0, 200)}`);
+      }
+      const url = upJson.url;
 
       // Run OCR
       const res = await fetch("/api/share-to-trace", {
@@ -46,14 +53,23 @@ export function ShareToTrace({ onApply }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrl: url }),
       });
-      if (!res.ok) throw new Error("read failed");
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`ocr ${res.status}: ${txt.slice(0, 200)}`);
+      }
       const data = await res.json();
+      // Show everything Claude returned so we can see what's happening
+      toast(
+        `venue=${data.venue ?? "—"} | date=${data.date ?? "—"} | conf=${data.confidence ?? "—"}`,
+        { duration: 8000 }
+      );
       setPreview({ ...data, imageUrl: url });
       if (data.confidence === "low") {
-        toast("low confidence — double-check the fields", { icon: "⚠" });
+        toast("low confidence — double-check the fields", { icon: "⚠", duration: 6000 });
       }
-    } catch {
-      toast.error("couldn't read it — try another image");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg, { duration: 10000 });
     } finally {
       setBusy(false);
     }

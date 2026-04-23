@@ -575,7 +575,9 @@ Rules:
           ? parsed.confidence
           : "low",
     };
-  } catch {
-    return empty;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[readTicket]", msg);
+    throw new Error(`readTicket: ${msg}`);
   }
 }
