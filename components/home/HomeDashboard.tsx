@@ -2,6 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
+import { FreshMoment } from "@/components/home/FreshMoment";
 
 interface HomeDashboardProps {
   recentPairings: Array<{
@@ -48,6 +49,10 @@ export function HomeDashboard({
           A photo, a place, a thing you noticed. That&rsquo;s the whole idea.
         </p>
       </div>
+
+      {/* Fresh signal: the most recent trace, as a single line. Makes Home
+          feel like it changed since yesterday. Hides itself on empty. */}
+      <FreshMoment />
 
       {/* Today-strip: three cells, each one action. Instant legibility. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-earth/10 mb-16">

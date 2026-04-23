@@ -5,6 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { Menu, X, Sun, Moon, ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import { StreakBadge } from "@/components/layout/StreakBadge";
 
 const NAV_ITEMS = [
   { href: "/home", label: "Home" },
@@ -74,6 +75,9 @@ export function Nav() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            {/* Quiet streak badge — hides itself when streak is 0 */}
+            <StreakBadge />
+
             {/* Theme toggle */}
             <button
               onClick={toggle}
