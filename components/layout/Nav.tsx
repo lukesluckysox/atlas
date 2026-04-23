@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { href: "/map", label: "Path" },
   { href: "/encounter", label: "Encounter" },
   { href: "/mark", label: "Notice" },
-  { href: "/explore", label: "Archive" },
+  { href: "/archive", label: "Archive" },
   { href: "/portrait", label: "Portrait" },
 ];
 
