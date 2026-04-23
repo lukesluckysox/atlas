@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ArchiveFeed } from "@/components/archive/ArchiveFeed";
+import { ArchiveTabs } from "@/components/archive/ArchiveTabs";
 
 /**
  * Archive — the unified feed of every trace across all four kinds.
@@ -41,7 +41,7 @@ export default async function ArchivePage() {
             </Link>
           }
         />
-        <ArchiveFeed isPro={!!user?.isPro} />
+        <ArchiveTabs isPro={!!user?.isPro} />
       </div>
     </AppShell>
   );

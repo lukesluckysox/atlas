@@ -14,7 +14,14 @@ interface CollectionRow {
   updatedAt: string;
 }
 
-export function CollectionsList() {
+interface CollectionsListProps {
+  /** Embedded mode: drop the PageHeader + outer padding so the component can
+   *  live inside another page (e.g. as an Archive sub-tab) without duplicating
+   *  the page chrome. */
+  embedded?: boolean;
+}
+
+export function CollectionsList({ embedded = false }: CollectionsListProps = {}) {
   const [items, setItems] = useState<CollectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -54,25 +61,8 @@ export function CollectionsList() {
     }
   }
 
-  return (
-    <div className="min-h-screen">
-      <PageHeader
-        label="Collections"
-        h1="Curate your traces."
-        tagline="Group by hand. A trip. A year. A mood."
-        right={
-          !creating && (
-            <button
-              onClick={() => setCreating(true)}
-              className="btn-secondary text-xs flex items-center gap-2"
-            >
-              <Plus size={13} /> New
-            </button>
-          )
-        }
-      />
-
-      <div className="max-w-3xl mx-auto px-8 pb-24">
+  const body = (
+    <>
         {creating && (
           <form
             onSubmit={create}
@@ -149,7 +139,47 @@ export function CollectionsList() {
             ))}
           </div>
         )}
+    </>
+  );
+
+  if (embedded) {
+    // Embedded shell: no outer PageHeader, just a lightweight "New" action
+    // row so the tab still lets users create a collection inline.
+    return (
+      <div>
+        {!creating && (
+          <div className="flex justify-end mb-6">
+            <button
+              onClick={() => setCreating(true)}
+              className="btn-secondary text-xs flex items-center gap-2"
+            >
+              <Plus size={13} /> New collection
+            </button>
+          </div>
+        )}
+        {body}
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      <PageHeader
+        label="Collections"
+        h1="Curate your traces."
+        tagline="Group by hand. A trip. A year. A mood."
+        right={
+          !creating && (
+            <button
+              onClick={() => setCreating(true)}
+              className="btn-secondary text-xs flex items-center gap-2"
+            >
+              <Plus size={13} /> New
+            </button>
+          )
+        }
+      />
+      <div className="max-w-3xl mx-auto px-8 pb-24">{body}</div>
     </div>
   );
 }
