@@ -24,17 +24,21 @@ export function PageHeader({
   right?: ReactNode;
 }) {
   return (
-    <div className="mb-12 flex items-start justify-between gap-4">
+    <div className="mb-12 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
       <div className="min-w-0">
         <p className="label mb-2">{label}</p>
-        <h1 className="font-serif text-4xl text-earth leading-tight">{h1}</h1>
+        <h1 className="font-serif text-4xl text-earth leading-tight break-words">
+          {h1}
+        </h1>
         {tagline && (
           <p className="font-mono text-xs text-earth/40 mt-2 leading-relaxed">
             {tagline}
           </p>
         )}
       </div>
-      {right && <div className="pt-1 shrink-0">{right}</div>}
+      {right && (
+        <div className="flex flex-wrap gap-2 sm:pt-1 sm:shrink-0">{right}</div>
+      )}
     </div>
   );
 }
