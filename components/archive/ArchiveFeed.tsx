@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
 import { Search, Music2, MapPin, Eye, HelpCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Trace, TraceKind } from "@/lib/trace";
 import { AddToCollection } from "@/components/collections/AddToCollection";
+import { TraceLightbox } from "@/components/archive/TraceLightbox";
 
 // ─── Delete endpoint map ──────────────────────────────────────────────────
 // Each kind has its own REST resource. Encounters aren't deletable (they're
@@ -82,10 +82,12 @@ const KIND_META: Record<
 function TraceCard({
   trace,
   isPro,
+  onOpen,
   onDeleted,
 }: {
   trace: Trace;
   isPro: boolean;
+  onOpen: () => void;
   onDeleted: (kind: TraceKind, id: string) => void;
 }) {
   const { Icon, label } = KIND_META[trace.kind];
@@ -94,7 +96,6 @@ function TraceCard({
   const deleteUrl = DELETE_PATH[trace.kind]?.(trace.id);
 
   const stop = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.preventDefault();
     e.stopPropagation();
   };
 
@@ -115,14 +116,17 @@ function TraceCard({
   };
 
   return (
-    <Link
-      href={trace.href}
-      className="block border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group relative"
+    <button
+      onClick={onOpen}
+      className="block w-full text-left border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group relative"
     >
-      {/* Top-right action cluster — stopPropagation so clicks don't navigate. */}
+      {/* Top-right action cluster — stopPropagation so clicks don't open the pop-out. */}
       <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
         {isPro && (
-          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <div
+            onClick={stop}
+            className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+          >
             <AddToCollection kind={trace.kind} refId={trace.id} isPro={isPro} />
           </div>
         )}
@@ -222,7 +226,7 @@ function TraceCard({
           )}
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
@@ -274,6 +278,11 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
     encounter: 0,
     total: 0,
   });
+
+  // Which entry is currently popped out. The index is into the traces array,
+  // which is already reverse-chrono (newest first), so prev/next in the
+  // Lightbox walks chronologically through the feed the user is looking at.
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   // Optimistic remove when a card's delete succeeds. The row is gone from the
   // DB so the next refresh wouldn't show it anyway — this just keeps the UI
@@ -541,14 +550,20 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
                 {format(new Date(day), "EEEE, MMMM d, yyyy")}
               </p>
               <div className="space-y-2">
-                {items.map((t) => (
-                  <TraceCard
-                    key={`${t.kind}-${t.id}`}
-                    trace={t}
-                    isPro={isPro}
-                    onDeleted={removeTrace}
-                  />
-                ))}
+                {items.map((t) => {
+                  const idx = traces.findIndex(
+                    (x) => x.kind === t.kind && x.id === t.id
+                  );
+                  return (
+                    <TraceCard
+                      key={`${t.kind}-${t.id}`}
+                      trace={t}
+                      isPro={isPro}
+                      onOpen={() => setOpenIndex(idx)}
+                      onDeleted={removeTrace}
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -576,6 +591,19 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Chrono pop-out. Kept inside ArchiveFeed so it shares the same traces
+          array (navigating prev/next walks the exact feed the user is on,
+          filters and all). */}
+      {openIndex !== null && traces[openIndex] && (
+        <TraceLightbox
+          traces={traces}
+          index={openIndex}
+          onClose={() => setOpenIndex(null)}
+          onNavigate={setOpenIndex}
+          onDeleted={removeTrace}
+        />
       )}
     </div>
   );
