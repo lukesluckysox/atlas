@@ -68,9 +68,13 @@ export async function POST(req: NextRequest) {
   // the text fields so the entry actually shows on the map. Try the most
   // specific label first (venue alone), then narrow with city, then city
   // only. Concert venues are almost always globally unique.
+  //
+  // Region types (state/country) are polygon-only — never geocode a pin
+  // for them. The boundary polygon is the map representation.
+  const isRegion = type === "state" || type === "country";
   let lat = typeof latitude === "number" ? latitude : null;
   let lng = typeof longitude === "number" ? longitude : null;
-  if (lat == null || lng == null) {
+  if (!isRegion && (lat == null || lng == null)) {
     const queries: string[] = [];
     const add = (q?: string | null) => {
       const v = (q ?? "").trim();
@@ -89,6 +93,10 @@ export async function POST(req: NextRequest) {
         break;
       }
     }
+  }
+  if (isRegion) {
+    lat = null;
+    lng = null;
   }
 
   // For state/country entries, resolve a boundary polygon at log time so the

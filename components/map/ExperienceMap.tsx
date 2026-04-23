@@ -321,8 +321,8 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
       setShowSuggestions(false);
       return;
     }
-    // Concerts search "city" type; others use their own type hint
-    const searchType = form.type === "concert" ? "state" : form.type;
+    // Concerts search by city; others use their own type hint.
+    const searchType = form.type === "concert" ? "city" : form.type;
     setSearching(true);
     const t = setTimeout(async () => {
       try {
@@ -441,6 +441,8 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
     }
 
     setSaving(true);
+    // Regions (state/country) are polygon-only — never send a pin.
+    const isRegionType = form.type === "state" || form.type === "country";
     const payload = {
       type: form.type,
       name,
@@ -449,8 +451,8 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
       // geocoding first (venues are usually globally unique).
       venue: form.type === "concert" ? form.venue.trim() || undefined : undefined,
       city: form.type === "concert" ? form.city.trim() || undefined : undefined,
-      latitude: form.latitude ?? undefined,
-      longitude: form.longitude ?? undefined,
+      latitude: isRegionType ? undefined : form.latitude ?? undefined,
+      longitude: isRegionType ? undefined : form.longitude ?? undefined,
       date: form.date || undefined,
       note: form.note || undefined,
     };
@@ -526,11 +528,16 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
     }
   };
 
-  // Include entries with either coordinates OR a boundary polygon (states/countries
-  // sometimes come in boundary-only), and gate by active layer filter.
-  const geoExperiences = experiences.filter(
-    (e) => ((e.latitude && e.longitude) || e.boundary) && isTypeActive(e.type)
-  );
+  // Region types render as polygons only — never as pins. Drop their
+  // lat/lng before passing to MapView so even legacy rows with stale
+  // coordinates shade cleanly without a dot in the middle.
+  const geoExperiences = experiences
+    .filter((e) => ((e.latitude && e.longitude) || e.boundary) && isTypeActive(e.type))
+    .map((e) =>
+      e.type === "state" || e.type === "country"
+        ? { ...e, latitude: null, longitude: null }
+        : e
+    );
   const visibleExperiences = experiences.filter((e) => isTypeActive(e.type));
 
   // Unified list rows: mix experiences + roads when the filter allows.
@@ -1076,46 +1083,43 @@ function LogPanel({
             autoComplete="off"
           />
         ) : (
-          <div className="relative">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder={
-                  isRegion
-                    ? form.type === "state"
-                      ? "State / region name *"
-                      : "Country name *"
-                    : "Name * (start typing to search)"
-                }
-                value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    name: e.target.value,
-                    // Region entries keep coords tied to their optional city picker —
-                    // don't clear them here.
-                    latitude: isRegion ? f.latitude : null,
-                    longitude: isRegion ? f.longitude : null,
-                  }))
-                }
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="input-field pr-8"
-                autoComplete="off"
-              />
-              {searching && !isRegion && (
-                <Search
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
-                />
-              )}
-            </div>
-            {!isRegion && showSuggestions && suggestions.length > 0 && (
-              <SuggestionsDropdown
-                suggestions={suggestions}
-                onPick={selectSuggestion}
-              />
-            )}
-          </div>
+          <LocationInput
+            placeholder={
+              isRegion
+                ? form.type === "state"
+                  ? "State / region name *"
+                  : "Country name *"
+                : "Name * (start typing to search)"
+            }
+            value={form.name}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                name: v,
+                // Regions render as polygons only — no pin, no coords stored.
+                latitude: null,
+                longitude: null,
+              }))
+            }
+            searchType={form.type}
+            onResolve={(hit) => {
+              setForm((f) => ({
+                ...f,
+                name: hit.name,
+                location: hit.location,
+                // Still no pin for regions — even if the user force-resolves.
+                latitude: isRegion ? null : hit.latitude,
+                longitude: isRegion ? null : hit.longitude,
+              }));
+            }}
+            // Drive the existing shared autocomplete dropdown.
+            showSuggestions={!isRegion && showSuggestions}
+            setShowSuggestions={setShowSuggestions}
+            suggestions={suggestions}
+            onPick={selectSuggestion}
+            searching={searching}
+            allowAutocomplete={!isRegion}
+          />
         )}
 
         <input
@@ -1125,72 +1129,44 @@ function LogPanel({
           className="input-field"
         />
 
-        {/* State/country: optional city picker. If picked, drops a pin at the city's
-            coordinates. If skipped, only the boundary polygon renders. */}
-        {isRegion && (
-          <RoadCityPicker
-            label="City (optional)"
-            value={
-              form.latitude != null && form.longitude != null
-                ? { label: form.location || "Selected city", lat: form.latitude, lng: form.longitude }
-                : null
-            }
-            onSelect={(v) => {
-              if (v) {
-                setForm((f) => ({
-                  ...f,
-                  location: v.label,
-                  latitude: v.lat,
-                  longitude: v.lng,
-                }));
-              } else {
-                setForm((f) => ({
-                  ...f,
-                  location: "",
-                  latitude: null,
-                  longitude: null,
-                }));
-              }
-            }}
-          />
-        )}
+        {/* State/country render as shaded polygons only — no pin. The
+            optional city picker was removed to keep the map representation
+            clean: regions = polygon, cities = pin. */}
 
         {/* Road uses an inline note inside RoadFields; skip the shared extras block. */}
 
         {/* Concert's "City" is how it geolocates, so we keep it visible. */}
         {isConcert && (
-          <div className="relative">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="City * (start typing to search)"
-                value={form.city}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    city: e.target.value,
-                    latitude: null,
-                    longitude: null,
-                  }))
-                }
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="input-field pr-8"
-                autoComplete="off"
-              />
-              {searching && (
-                <Search
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-earth/40 animate-pulse"
-                />
-              )}
-            </div>
-            {showSuggestions && suggestions.length > 0 && (
-              <SuggestionsDropdown
-                suggestions={suggestions}
-                onPick={selectSuggestion}
-              />
-            )}
-          </div>
+          <LocationInput
+            placeholder="City * (start typing to search)"
+            value={form.city}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                city: v,
+                // Clear coords on keystroke — user must pick from dropdown
+                // or tap the magnifying glass to re-resolve.
+                latitude: null,
+                longitude: null,
+              }))
+            }
+            searchType="city"
+            onResolve={(hit) => {
+              setForm((f) => ({
+                ...f,
+                city: hit.name,
+                location: [f.venue, hit.name, hit.location].filter(Boolean).join(", "),
+                latitude: hit.latitude,
+                longitude: hit.longitude,
+              }));
+            }}
+            showSuggestions={showSuggestions}
+            setShowSuggestions={setShowSuggestions}
+            suggestions={suggestions}
+            onPick={selectSuggestion}
+            searching={searching}
+            allowAutocomplete={true}
+          />
         )}
 
         {/* OPTIONAL fields — collapsed by default. Hidden for road (has its own note)
@@ -1220,13 +1196,26 @@ function LogPanel({
           {showMore && (
             <div className="mt-3 space-y-3">
               {isConcert ? (
-                <input
-                  type="text"
-                  placeholder="Venue (e.g. Red Rocks Amphitheatre)"
+                <VenueInput
                   value={form.venue}
-                  onChange={(e) => setForm((f) => ({ ...f, venue: e.target.value }))}
-                  className="input-field"
-                  autoComplete="off"
+                  onChange={(v) =>
+                    setForm((f) => ({ ...f, venue: v }))
+                  }
+                  onResolve={(hit) => {
+                    // Venues are globally unique — a resolved hit is the
+                    // single best pin we can get for a concert.
+                    setForm((f) => ({
+                      ...f,
+                      venue: hit.name,
+                      // If no city is set yet, derive one from the hit's
+                      // display components so the map has context.
+                      city: f.city || (hit.location.split(",")[0]?.trim() ?? ""),
+                      location: [hit.name, f.city || hit.location].filter(Boolean).join(", "),
+                      latitude: hit.latitude,
+                      longitude: hit.longitude,
+                    }));
+                  }}
+                  city={form.city}
                 />
               ) : (
                 <input
@@ -1377,6 +1366,7 @@ function RoadCityPicker({
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   async function search(v: string) {
     setQ(v);
@@ -1386,7 +1376,9 @@ function RoadCityPicker({
     }
     setLoading(true);
     try {
-      const r = await fetch(`/api/places/search?q=${encodeURIComponent(v)}`);
+      const r = await fetch(
+        `/api/places/search?q=${encodeURIComponent(v)}&type=city`
+      );
       if (r.ok) {
         const raw = await r.json();
         // Endpoint returns { results: [...] }; be forgiving of either shape.
@@ -1399,6 +1391,32 @@ function RoadCityPicker({
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Fallback: resolve the typed text against /api/places/search and take
+  // the top hit. Fires from the magnifying-glass button or Enter.
+  async function resolveTyped() {
+    const v = q.trim();
+    if (!v || resolving) return;
+    setResolving(true);
+    try {
+      const hit = await resolveTopPlace(v, "city");
+      if (hit) {
+        const region = (hit.location || "").split(",")[0]?.trim();
+        onSelect({
+          label: region ? `${hit.name}, ${region}` : hit.name,
+          lat: hit.latitude,
+          lng: hit.longitude,
+        });
+        setQ("");
+        setResults([]);
+        toast.success(`Pinned ${hit.name}.`);
+      } else {
+        toast.error("Couldn’t find that city. Try a different spelling.");
+      }
+    } finally {
+      setResolving(false);
     }
   }
 
@@ -1427,19 +1445,42 @@ function RoadCityPicker({
   return (
     <div>
       <p className="label mb-2">{label}</p>
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => search(e.target.value)}
-        placeholder="City, town..."
-        className="input-field"
-        autoComplete="off"
-      />
+      <div className="relative">
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => search(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void resolveTyped();
+            }
+          }}
+          placeholder="City, town..."
+          className="input-field pr-10"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={resolveTyped}
+          disabled={!q.trim() || resolving}
+          title="Find this city"
+          aria-label="Find this city"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-earth/50 hover:text-earth disabled:opacity-30"
+        >
+          <Search
+            size={14}
+            className={loading || resolving ? "animate-pulse" : ""}
+          />
+        </button>
+      </div>
       {loading && (
         <p className="font-mono text-[10px] text-earth/40 mt-1">Searching...</p>
       )}
       {!loading && q.trim().length >= 2 && results.length === 0 && (
-        <p className="font-mono text-[10px] text-earth/40 mt-1">No matches. Try a different spelling.</p>
+        <p className="font-mono text-[10px] text-earth/40 mt-1">
+          No matches. Try a different spelling, or tap the magnifying glass.
+        </p>
       )}
       {results.length > 0 && (
         <div className="mt-1 border border-earth/10 bg-parchment divide-y divide-earth/5 max-h-40 overflow-y-auto">
@@ -1467,6 +1508,219 @@ function RoadCityPicker({
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Shared resolver — hit /api/places/search once and return the top match.
+// Used by the magnifying-glass fallback on every location input so a user who
+// types the full thing (without waiting for the dropdown) can still get coords.
+async function resolveTopPlace(
+  q: string,
+  type: string | null
+): Promise<PlaceResult | null> {
+  const query = q.trim();
+  if (query.length < 2) return null;
+  const url = type
+    ? `/api/places/search?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`
+    : `/api/places/search?q=${encodeURIComponent(query)}`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const data: { results?: PlaceResult[] } = await r.json();
+    return data.results?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Generic location input with debounced autocomplete + a magnifying-glass
+// button that force-resolves the typed text if the user didn't pick from
+// the dropdown. Wraps the existing shared suggestions state for Name/City.
+function LocationInput({
+  placeholder,
+  value,
+  onChange,
+  searchType,
+  onResolve,
+  showSuggestions,
+  setShowSuggestions,
+  suggestions,
+  onPick,
+  searching,
+  allowAutocomplete,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  searchType: string | null;
+  onResolve: (hit: PlaceResult) => void;
+  showSuggestions: boolean;
+  setShowSuggestions: (v: boolean) => void;
+  suggestions: PlaceResult[];
+  onPick: (s: PlaceResult) => void;
+  searching: boolean;
+  allowAutocomplete: boolean;
+}) {
+  const [resolving, setResolving] = useState(false);
+
+  const handleManualSearch = async () => {
+    if (!value.trim() || resolving) return;
+    setResolving(true);
+    try {
+      const hit = await resolveTopPlace(value, searchType);
+      if (hit) {
+        onResolve(hit);
+        toast.success(`Pinned ${hit.name}.`);
+      } else {
+        toast.error("Couldn’t find that place. Try a different spelling.");
+      }
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleManualSearch();
+            }
+          }}
+          className="input-field pr-10"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={handleManualSearch}
+          disabled={!value.trim() || resolving}
+          title="Find this place"
+          aria-label="Find this place"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-earth/50 hover:text-earth disabled:opacity-30"
+        >
+          <Search
+            size={14}
+            className={searching || resolving ? "animate-pulse" : ""}
+          />
+        </button>
+      </div>
+      {allowAutocomplete && showSuggestions && suggestions.length > 0 && (
+        <SuggestionsDropdown suggestions={suggestions} onPick={onPick} />
+      )}
+    </div>
+  );
+}
+
+// Venue input — debounced autocomplete biased toward named landmarks/venues,
+// plus the same magnifying-glass fallback. Self-contained (doesn't share the
+// parent's suggestions state) so it can coexist with the City field above.
+function VenueInput({
+  value,
+  onChange,
+  onResolve,
+  city,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onResolve: (hit: PlaceResult) => void;
+  city?: string;
+}) {
+  const [results, setResults] = useState<PlaceResult[]>([]);
+  const [show, setShow] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [resolving, setResolving] = useState(false);
+
+  useEffect(() => {
+    const q = value.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setShow(false);
+      return;
+    }
+    // Narrow with city if we have one — "Red Rocks, Morrison" beats "Red Rocks".
+    const composed = city && city.trim() ? `${q}, ${city.trim()}` : q;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `/api/places/search?q=${encodeURIComponent(composed)}&type=landmark`
+        );
+        if (r.ok) {
+          const data: { results?: PlaceResult[] } = await r.json();
+          setResults(data.results ?? []);
+          setShow(true);
+        }
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [value, city]);
+
+  const handleManualSearch = async () => {
+    if (!value.trim() || resolving) return;
+    setResolving(true);
+    try {
+      const composed = city && city.trim() ? `${value}, ${city.trim()}` : value;
+      const hit = await resolveTopPlace(composed, "landmark");
+      if (hit) {
+        onResolve(hit);
+        toast.success(`Pinned ${hit.name}.`);
+        setShow(false);
+      } else {
+        toast.error("Couldn’t find that venue. Add a city and try again.");
+      }
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Venue (e.g. Red Rocks Amphitheatre)"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setTimeout(() => setShow(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleManualSearch();
+            }
+          }}
+          className="input-field pr-10"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={handleManualSearch}
+          disabled={!value.trim() || resolving}
+          title="Find this venue"
+          aria-label="Find this venue"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-earth/50 hover:text-earth disabled:opacity-30"
+        >
+          <Search size={14} className={searching || resolving ? "animate-pulse" : ""} />
+        </button>
+      </div>
+      {show && results.length > 0 && (
+        <SuggestionsDropdown
+          suggestions={results}
+          onPick={(s) => {
+            onResolve(s);
+            setShow(false);
+          }}
+        />
       )}
     </div>
   );
