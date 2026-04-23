@@ -247,6 +247,37 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
     persistFilter(next);
   };
 
+  // Isolate a single type — hide every other type + hide roads.
+  const soloType = (value: string) => {
+    const next = new Set([value]);
+    setActiveTypes(next);
+    persistFilter(next);
+  };
+
+  // Double-tap detection ref (works on both desktop click + mobile tap).
+  const lastTapRef = useRef<{ key: string; at: number } | null>(null);
+  const handleTapOrDoubleTap = (
+    key: string,
+    onSingle: () => void,
+    onDouble: () => void
+  ) => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.key === key && now - last.at < 350) {
+      lastTapRef.current = null;
+      onDouble();
+    } else {
+      lastTapRef.current = { key, at: now };
+      // Delay single-action so a follow-up tap can cancel it.
+      setTimeout(() => {
+        if (lastTapRef.current && lastTapRef.current.key === key && lastTapRef.current.at === now) {
+          lastTapRef.current = null;
+          onSingle();
+        }
+      }, 360);
+    }
+  };
+
   // Toggle a single type within a group (second-tier chips).
   const toggleGroupType = (groupTypes: string[], value: string) => {
     setActiveTypes((prev) => {
@@ -627,18 +658,28 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
                 return (
                   <button
                     key={g.value}
-                    onClick={() => {
-                      // First click: solo the group. Second click on the same
-                      // already-soloed group: expand its fine-grained chips.
-                      if (active && full) {
-                        setExpandedGroup(
-                          expandedGroup === g.value ? null : g.value
-                        );
-                      } else {
-                        soloGroup(g.types);
-                        setExpandedGroup(g.value);
-                      }
-                    }}
+                    title="Tap to solo — double-tap to isolate without chips"
+                    onClick={() =>
+                      handleTapOrDoubleTap(
+                        `group:${g.value}`,
+                        () => {
+                          // Single: solo the group. If already soloed, toggle chip drawer.
+                          if (active && full) {
+                            setExpandedGroup(
+                              expandedGroup === g.value ? null : g.value
+                            );
+                          } else {
+                            soloGroup(g.types);
+                            setExpandedGroup(g.value);
+                          }
+                        },
+                        () => {
+                          // Double: isolate group, no chip drawer.
+                          soloGroup(g.types);
+                          setExpandedGroup(null);
+                        }
+                      )
+                    }
                     className={`bg-parchment px-3 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors ${
                       active
                         ? "text-earth bg-earth/5"
@@ -697,13 +738,19 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
                   return (
                     <button
                       key={t.value}
-                      onClick={() => toggleGroupType(group.types, t.value)}
+                      onClick={() =>
+                        handleTapOrDoubleTap(
+                          `type:${t.value}`,
+                          () => toggleGroupType(group.types, t.value),
+                          () => soloType(t.value)
+                        )
+                      }
                       className={`flex items-center gap-1.5 px-2 py-1 border font-mono text-[10px] uppercase tracking-widest transition-all ${
                         active
                           ? "border-earth/30 text-earth/80 bg-parchment"
                           : "border-earth/10 text-earth/25 line-through"
                       }`}
-                      title={active ? "Click to hide" : "Click to show"}
+                      title="Tap to toggle — double-tap to isolate"
                     >
                       <span
                         className={`w-2 h-2 rounded-full border ${
