@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/encounter", label: "Encounter" },
   { href: "/mark", label: "Notice" },
   { href: "/archive", label: "Archive" },
+  { href: "/ask", label: "Ask" },
   { href: "/collections", label: "Collections" },
   { href: "/portrait", label: "Portrait" },
 ];

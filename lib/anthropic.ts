@@ -368,3 +368,127 @@ Return the caption text only, nothing else.`,
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Ask Trace — one-shot Q&A grounded in the user's own traces.
+// ---------------------------------------------------------------------------
+
+export interface AskTraceContext {
+  pairings: Array<{ trackName: string; artistName: string; note?: string | null; location?: string | null; createdAt: Date }>;
+  experiences: Array<{ type: string; name: string; location?: string | null; date: Date | null; note?: string | null }>;
+  encounters: Array<{ question: string; answer: string | null; landed: boolean | null; date: Date }>;
+  marks: Array<{ content: string; createdAt: Date }>;
+}
+
+export interface AskTraceAnswer {
+  answer: string;
+  citations: Array<{ kind: "tracks" | "path" | "notice" | "encounter"; hint: string }>;
+}
+
+/**
+ * Answer a user's question using their own traces as ground truth. The model
+ * is instructed to stay grounded — if the traces don't support an answer, say
+ * "not enough signal" rather than invent.
+ *
+ * Returns citations as short hints (not IDs) so the UI can surface "from your
+ * Tracks", "from your Path", etc. without bleeding internal refs.
+ */
+export async function askTrace(
+  question: string,
+  ctx: AskTraceContext
+): Promise<AskTraceAnswer> {
+  const formattedPairings = ctx.pairings
+    .slice(0, 40)
+    .map((p) => {
+      const date = p.createdAt.toISOString().slice(0, 10);
+      const parts = [`[${date}] "${p.trackName}" by ${p.artistName}`];
+      if (p.location) parts.push(`at ${p.location}`);
+      if (p.note) parts.push(`note: ${p.note}`);
+      return `- ${parts.join(" — ")}`;
+    })
+    .join("\n") || "(none)";
+
+  const formattedExperiences = ctx.experiences
+    .slice(0, 40)
+    .map((e) => {
+      const date = e.date ? e.date.toISOString().slice(0, 10) : "undated";
+      const parts = [`[${date}] ${e.type}: ${e.name}`];
+      if (e.location) parts.push(`in ${e.location}`);
+      if (e.note) parts.push(`note: ${e.note}`);
+      return `- ${parts.join(" — ")}`;
+    })
+    .join("\n") || "(none)";
+
+  const formattedEncounters = ctx.encounters
+    .slice(0, 30)
+    .map((e) => {
+      const date = e.date.toISOString().slice(0, 10);
+      const a = e.answer ? ` answer: ${e.answer}` : "";
+      const verdict = e.landed === true ? " [landed]" : e.landed === false ? " [didn't land]" : "";
+      return `- [${date}] Q: ${e.question}${a}${verdict}`;
+    })
+    .join("\n") || "(none)";
+
+  const formattedMarks = ctx.marks
+    .slice(0, 30)
+    .map((m) => {
+      const date = m.createdAt.toISOString().slice(0, 10);
+      return `- [${date}] ${m.content.slice(0, 200)}`;
+    })
+    .join("\n") || "(none)";
+
+  const prompt = `${TRACE_VOICE}
+
+The user has asked a question about their own traces. Answer using ONLY the data below. If the signal is thin, say so directly — do not invent patterns or speculate.
+
+USER QUESTION:
+${question.slice(0, 500)}
+
+THEIR TRACKS (music paired with moments):
+${formattedPairings}
+
+THEIR PATH (places logged):
+${formattedExperiences}
+
+THEIR ENCOUNTERS (daily questions + answers):
+${formattedEncounters}
+
+THEIR NOTICES (short field notes):
+${formattedMarks}
+
+Respond in 1-4 sentences. Voice is Trace's — dry, specific, earned. When you reference a trace, name the kind inline ("from your Tracks", "in a Notice from last spring"). No lists, no headers. Return JSON:
+{
+  "answer": "...",
+  "citations": [{"kind": "tracks|path|notice|encounter", "hint": "short reference"}]
+}
+Max 3 citations. If you can't answer from the data, return {"answer": "Not enough signal yet.", "citations": []}.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 600,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const c = response.content[0];
+    if (c.type !== "text") {
+      return { answer: "Not enough signal yet.", citations: [] };
+    }
+    const match = c.text.match(/\{[\s\S]*\}/);
+    if (!match) return { answer: c.text.trim().slice(0, 500), citations: [] };
+    try {
+      const parsed = JSON.parse(match[0]) as AskTraceAnswer;
+      const answer = typeof parsed.answer === "string" ? parsed.answer.slice(0, 1000) : "Not enough signal yet.";
+      const citations = Array.isArray(parsed.citations)
+        ? parsed.citations
+            .filter((x) => x && typeof x.kind === "string" && typeof x.hint === "string")
+            .slice(0, 3)
+        : [];
+      return { answer, citations };
+    } catch {
+      return { answer: c.text.trim().slice(0, 500), citations: [] };
+    }
+  } catch (err) {
+    console.error("[askTrace] failed:", err);
+    return { answer: "Couldn't reach the model just now. Try again in a moment.", citations: [] };
+  }
+}

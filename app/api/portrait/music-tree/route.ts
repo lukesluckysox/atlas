@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeGenre, normalizeGenreList } from "@/lib/genres";
 
 /**
  * Music tree — TRACE-NATIVE ONLY.
@@ -64,6 +65,7 @@ export async function GET() {
       byArtist.set(artist, entry);
     }
     entry.count += 1;
+    // Store raw lowercased genres — we normalize to families at grouping time.
     for (const g of p.genres ?? []) {
       const norm = g.trim().toLowerCase();
       if (norm) entry.genres.add(norm);
@@ -83,19 +85,22 @@ export async function GET() {
   const artists: ArtistBranch[] = [];
 
   for (const [name, data] of Array.from(byArtist.entries())) {
+    const rawGenres = Array.from(data.genres);
+    // Map each raw microgenre to a canonical family, dedupe, preserve order.
+    const families = normalizeGenreList(rawGenres);
     const branch: ArtistBranch = {
       name,
       count: data.count,
-      genres: Array.from(data.genres),
+      // Show normalized families on the branch so the UI labels stay stable.
+      genres: families,
       tracks: Array.from(data.tracks.values()).slice(0, MAX_TRACKS_PER_ARTIST),
     };
     artists.push(branch);
-    if (branch.genres.length === 0) {
+    if (rawGenres.length === 0) {
       genreCounts.set("unsorted", (genreCounts.get("unsorted") ?? 0) + branch.count);
     } else {
-      // Assign each artist to its single most-representative genre — the first
-      // Spotify genre is usually the anchor. This keeps the tree clean.
-      const primary = branch.genres[0];
+      // Primary family = family of the first Spotify genre (the anchor).
+      const primary = normalizeGenre(rawGenres[0]);
       genreCounts.set(primary, (genreCounts.get(primary) ?? 0) + branch.count);
     }
   }
@@ -109,6 +114,7 @@ export async function GET() {
     const members = artists
       .filter((a) => {
         if (genre === "unsorted") return a.genres.length === 0;
+        // An artist belongs to the group whose family is their primary family.
         return a.genres[0] === genre;
       })
       .sort((a, b) => b.count - a.count)
