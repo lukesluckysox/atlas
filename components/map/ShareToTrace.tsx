@@ -33,10 +33,18 @@ export function ShareToTrace({ onApply }: Props) {
     setBusy(true);
     setPreview(null);
     try {
-      // Upload first
-      const form = new FormData();
-      form.append("file", file);
-      const up = await fetch("/api/upload", { method: "POST", body: form });
+      // Upload first (route expects base64 JSON, not FormData)
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error("file read failed"));
+        r.readAsDataURL(file);
+      });
+      const up = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: b64, folder: "share-to-trace" }),
+      });
       if (!up.ok) {
         const txt = await up.text().catch(() => "");
         throw new Error(`upload ${up.status}: ${txt.slice(0, 200)}`);
