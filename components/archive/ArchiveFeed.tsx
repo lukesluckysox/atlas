@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
 import { Search, Music2, MapPin, Eye, HelpCircle } from "lucide-react";
@@ -22,6 +22,8 @@ interface Counts {
 interface TracesResponse {
   traces: Array<Omit<Trace, "when"> & { when: string }>;
   counts: Counts;
+  nextBefore: string | null;
+  hasMore: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -180,23 +182,32 @@ export function ArchiveFeed() {
     total: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nextBefore, setNextBefore] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
-  // Fetch whenever filters change. Kind filter is server-side, time is
-  // server-side, query is server-side (debounced).
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
+  // Build a URL for /api/traces given current filters and optional cursor.
+  const buildUrl = (before: string | null): string => {
     const params = new URLSearchParams();
     if (kind !== "all") params.set("kind", kind);
     const since = sinceFor(time);
     if (since) params.set("since", since);
     if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
-    params.set("limit", "200");
+    if (before) params.set("before", before);
+    params.set("take", "50");
+    return `/api/traces?${params.toString()}`;
+  };
 
-    fetch(`/api/traces?${params.toString()}`)
+  // First page / filter change — resets the list.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetch(buildUrl(null))
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = (await r.json()) as TracesResponse;
@@ -207,6 +218,8 @@ export function ArchiveFeed() {
         }));
         setTraces(parsed);
         setCounts(data.counts);
+        setNextBefore(data.nextBefore);
+        setHasMore(data.hasMore);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -219,7 +232,45 @@ export function ArchiveFeed() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, time, debouncedQuery]);
+
+  // Load the next page using the cursor. Appends to existing list.
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || !nextBefore) return;
+    setLoadingMore(true);
+    try {
+      const r = await fetch(buildUrl(nextBefore));
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = (await r.json()) as TracesResponse;
+      const parsed: Trace[] = data.traces.map((t) => ({
+        ...t,
+        when: new Date(t.when),
+      }));
+      setTraces((prev) => [...prev, ...parsed]);
+      setNextBefore(data.nextBefore);
+      setHasMore(data.hasMore);
+    } catch {
+      // Silent — retain what we have, user can scroll again to retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // IntersectionObserver for infinite scroll.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "400px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, nextBefore, loadingMore]);
 
   // Group by day for timeline feel.
   const grouped = useMemo(() => {
@@ -339,6 +390,29 @@ export function ArchiveFeed() {
               </div>
             </section>
           ))}
+
+          {/* Infinite-scroll sentinel + load-more fallback button */}
+          {hasMore && (
+            <div ref={sentinelRef} className="pt-6 pb-12 text-center">
+              {loadingMore ? (
+                <p className="font-mono text-[10px] uppercase tracking-widest text-earth/30">
+                  Loading more...
+                </p>
+              ) : (
+                <button
+                  onClick={loadMore}
+                  className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth border border-earth/15 hover:border-earth/40 px-4 py-2 transition-colors"
+                >
+                  Load more
+                </button>
+              )}
+            </div>
+          )}
+          {!hasMore && traces.length > 20 && (
+            <p className="font-mono text-[10px] uppercase tracking-widest text-earth/20 text-center pt-6 pb-12">
+              End of archive.
+            </p>
+          )}
         </div>
       )}
     </div>
