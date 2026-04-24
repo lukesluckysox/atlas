@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Upload, Search, Sparkles, X, Check, Music2 } from "lucide-react";
+import { Upload, Search, Sparkles, X, Check, Music2, Share2 } from "lucide-react";
 import { NowPlaying, type NowPlayingTrack } from "@/components/spotify/NowPlaying";
 import { SaveChip, useSaveState } from "@/components/ui/SaveChip";
 import { sampleFileMood } from "@/lib/photo-mood";
@@ -30,6 +30,7 @@ interface PairStudioProps {
 }
 
 interface JustSaved {
+  id: string;
   photoUrl: string;
   albumArt?: string | null;
   trackName: string;
@@ -189,7 +190,9 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
     }
     // Lands-in-archive sequence: bloom the pair, then park it on the ribbon
     // and reset the form so you can log another one.
+    const saved = res.data as { id?: string } | undefined;
     setJustSaved({
+      id: saved?.id ?? "",
       photoUrl: uploadedPhotoUrl ?? "",
       albumArt: selectedTrack.albumArt,
       trackName: selectedTrack.name,
@@ -278,12 +281,20 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
             <p className="label">
               {justSaved ? "Landed in archive" : "Recent"}
             </p>
-            <Link
-              href="/explore"
-              className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth transition-colors"
-            >
-              Archive →
-            </Link>
+            <div className="flex items-center gap-4">
+              {justSaved && justSaved.id && (
+                <SharePairingLink
+                  pairingId={justSaved.id}
+                  trackName={justSaved.trackName}
+                />
+              )}
+              <Link
+                href="/explore"
+                className="font-mono text-[10px] uppercase tracking-widest text-earth/40 hover:text-earth transition-colors"
+              >
+                Archive →
+              </Link>
+            </div>
           </div>
           <div className="inline-flex gap-px w-fit">
             {ribbonItems.filter((p) => !!p.photoUrl).map((p) => (
@@ -545,5 +556,71 @@ export function PairStudio({ isPro, recentPairings }: PairStudioProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact share trigger sitting next to the ribbon header after a save.
+ * Fetches the share card PNG and invokes the native share sheet on mobile
+ * (with the image attached) or falls back to a direct download.
+ */
+function SharePairingLink({
+  pairingId,
+  trackName,
+}: {
+  pairingId: string;
+  trackName: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const handleShare = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/pairings/${pairingId}/share-card`);
+      if (!res.ok) throw new Error("share-card failed");
+      const blob = await res.blob();
+      const slug = trackName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")
+        .slice(0, 40) || "pairing";
+      const filename = `trace-${slug}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      const nav = navigator as Navigator & {
+        canShare?: (data?: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.canShare?.({ files: [file] }) && nav.share) {
+        await nav.share({ files: [file], title: trackName, text: trackName });
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Saved to your device.");
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      toast.error("Could not generate share card.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      disabled={busy}
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-amber hover:text-earth transition-colors disabled:opacity-50"
+    >
+      <Share2 size={11} />
+      {busy ? "Preparing…" : "Share card"}
+    </button>
   );
 }

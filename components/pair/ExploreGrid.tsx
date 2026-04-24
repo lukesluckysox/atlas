@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { MapPin, X, RefreshCw, Trash2 } from "lucide-react";
+import { MapPin, X, RefreshCw, Trash2, Share2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useEffect, useMemo, useState } from "react";
 
@@ -451,7 +451,7 @@ function Lightbox({
             )}
           </div>
 
-          {/* Delete — two-tap confirm. Removes from Tracks and Archive alike. */}
+          {/* Actions — Share + Delete. Delete is two-tap confirm. */}
           <div className="pt-4 border-t border-earth/10">
             {confirmDelete ? (
               <div className="flex items-center gap-3">
@@ -471,17 +471,97 @@ function Lightbox({
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-terracotta/80 hover:text-terracotta transition-colors"
-              >
-                <Trash2 size={12} />
-                Delete pairing
-              </button>
+              <div className="flex items-center justify-between gap-4">
+                <SharePairingButton pairingId={pairing.id} trackName={pairing.trackName} />
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-terracotta/80 hover:text-terracotta transition-colors"
+                >
+                  <Trash2 size={12} />
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Share button for a pairing. Fetches the generated share card PNG, then:
+ *  - On devices that support navigator.share with files → opens the native
+ *    share sheet with the image attached (Instagram, Messages, etc.).
+ *  - Otherwise → triggers a direct download of the PNG.
+ */
+function SharePairingButton({
+  pairingId,
+  trackName,
+}: {
+  pairingId: string;
+  trackName: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const handleShare = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/pairings/${pairingId}/share-card`);
+      if (!res.ok) throw new Error("share-card failed");
+      const blob = await res.blob();
+      const filename = `trace-${slugify(trackName) || "pairing"}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      // Prefer the native share sheet when it can carry files.
+      const nav = navigator as Navigator & {
+        canShare?: (data?: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.canShare?.({ files: [file] }) && nav.share) {
+        await nav.share({
+          files: [file],
+          title: trackName,
+          text: trackName,
+        });
+        return;
+      }
+
+      // Fallback: trigger download.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Saved to your device.");
+    } catch (err) {
+      // AbortError fires when the user dismisses the share sheet — don't treat as failure.
+      if (err instanceof Error && err.name === "AbortError") return;
+      toast.error("Could not generate share card.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      disabled={busy}
+      className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-earth/70 hover:text-amber transition-colors disabled:opacity-50"
+    >
+      <Share2 size={12} />
+      {busy ? "Preparing…" : "Share"}
+    </button>
+  );
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 40);
 }

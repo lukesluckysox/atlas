@@ -4,21 +4,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Edge runtime required for ImageResponse \u2014 ships as a WASM bundle.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Shareable portrait image (1200x1500, 4:5 \u2014 Instagram portrait sweet spot).
+ * Shareable portrait image — abbreviated, editorial, one artifact from each
+ * of the four capture modes (Track / Path / Question / Moment). Counts are
+ * shown as a subtle single mono line, not giant numbers.
  *
- * Renders the user's portrait summary + counts as a PNG for download and
- * socials. No Pro gate \u2014 the portrait page itself is open; the image is just
- * another read of the same data. Tokens unnecessary since we auth per request.
- *
- * Format override via ?size=square|story:
- *   - square: 1200x1200 (Twitter, LinkedIn)
- *   - story:  1080x1920 (Instagram/TikTok stories)
- *   - (default) 1200x1500 portrait
+ * Sizes via ?size=square|story (default portrait 4:5 1080x1350).
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -30,21 +24,43 @@ export async function GET(req: NextRequest) {
   const sizeParam = url.searchParams.get("size") ?? "portrait";
   const { width, height } = dimsFor(sizeParam);
 
-  const [portrait, user, counts] = await Promise.all([
-    prisma.portrait.findUnique({ where: { userId: session.user.id } }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { username: true, name: true },
-    }),
-    Promise.all([
-      prisma.pairing.count({ where: { userId: session.user.id } }),
-      prisma.experience.count({ where: { userId: session.user.id } }),
-      prisma.encounter.count({
-        where: { userId: session.user.id, landed: { not: null } },
+  const userId = session.user.id;
+  const [portrait, user, latestPairing, latestExperience, latestEncounter, latestMark, counts] =
+    await Promise.all([
+      prisma.portrait.findUnique({ where: { userId } }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, name: true },
       }),
-      prisma.mark.count({ where: { userId: session.user.id } }),
-    ]),
-  ]);
+      prisma.pairing.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: { trackName: true, artistName: true, location: true },
+      }),
+      prisma.experience.findFirst({
+        where: { userId },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        select: { name: true, location: true, type: true },
+      }),
+      prisma.encounter.findFirst({
+        where: { userId },
+        orderBy: { date: "desc" },
+        select: { question: true },
+      }),
+      prisma.mark.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: { content: true, summary: true, keyword: true },
+      }),
+      Promise.all([
+        prisma.pairing.count({ where: { userId } }),
+        prisma.experience.count({ where: { userId } }),
+        prisma.encounter.count({
+          where: { userId, landed: { not: null } },
+        }),
+        prisma.mark.count({ where: { userId } }),
+      ]),
+    ]);
 
   if (!portrait) {
     return NextResponse.json(
@@ -56,16 +72,30 @@ export async function GET(req: NextRequest) {
   const [tracks, paths, encounters, notices] = counts;
   const displayName = user?.name || user?.username || "A tracer";
 
-  // Pull a few "patterns" tags for texture \u2014 tasteProfile.patterns.
-  const taste = portrait.tasteProfile as { patterns?: string[] } | null;
-  const patterns = Array.isArray(taste?.patterns) ? taste!.patterns!.slice(0, 4) : [];
-
-  // Palette constants \u2014 kept in sync with tailwind tokens.
+  // Palette — tailwind-synced.
   const PARCHMENT = "#F5F0E8";
   const EARTH = "#2C1810";
   const AMBER = "#D4A843";
   const EARTH_60 = "rgba(44, 24, 16, 0.6)";
-  const EARTH_30 = "rgba(44, 24, 16, 0.3)";
+  const EARTH_40 = "rgba(44, 24, 16, 0.4)";
+  const EARTH_20 = "rgba(44, 24, 16, 0.2)";
+
+  // One representative line per mode. Falls back to a quiet em-dash when
+  // the user hasn't captured in that mode yet — keeps the grid balanced.
+  const trackLine = latestPairing
+    ? `${latestPairing.trackName} — ${latestPairing.artistName}`
+    : "—";
+  const pathLine = latestExperience
+    ? latestExperience.location
+      ? `${latestExperience.name}, ${latestExperience.location}`
+      : latestExperience.name
+    : "—";
+  const questionLine = latestEncounter ? latestEncounter.question : "—";
+  const momentLine = latestMark
+    ? latestMark.summary || latestMark.content
+    : "—";
+
+  const countsLine = `${tracks} tracks  ·  ${paths} paths  ·  ${encounters} questions  ·  ${notices} moments`;
 
   return new ImageResponse(
     (
@@ -76,25 +106,25 @@ export async function GET(req: NextRequest) {
           display: "flex",
           flexDirection: "column",
           backgroundColor: PARCHMENT,
-          padding: sizeParam === "story" ? "100px 80px" : "80px",
+          padding: sizeParam === "story" ? "96px 72px" : "72px",
           fontFamily: "serif",
           position: "relative",
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", flexDirection: "column", marginBottom: 40 }}>
+        <div style={{ display: "flex", flexDirection: "column", marginBottom: 36 }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
-              marginBottom: 12,
+              gap: 10,
+              marginBottom: 14,
             }}
           >
             <div
               style={{
-                width: 8,
-                height: 8,
+                width: 6,
+                height: 6,
                 borderRadius: 999,
                 backgroundColor: AMBER,
               }}
@@ -102,7 +132,7 @@ export async function GET(req: NextRequest) {
             <span
               style={{
                 fontFamily: "monospace",
-                fontSize: 16,
+                fontSize: 14,
                 color: EARTH_60,
                 letterSpacing: 4,
                 textTransform: "uppercase",
@@ -113,7 +143,7 @@ export async function GET(req: NextRequest) {
           </div>
           <div
             style={{
-              fontSize: sizeParam === "story" ? 58 : 64,
+              fontSize: sizeParam === "story" ? 52 : 54,
               color: EARTH,
               lineHeight: 1.05,
               letterSpacing: -0.5,
@@ -124,136 +154,124 @@ export async function GET(req: NextRequest) {
           </div>
         </div>
 
-        {/* Summary \u2014 the hero quote */}
+        {/* Hero summary — tighter, ~200 chars. Amber hairline on the left. */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            borderLeft: `3px solid ${AMBER}`,
-            paddingLeft: 32,
-            marginBottom: 48,
-            flex: 1,
+            borderLeft: `2px solid ${AMBER}`,
+            paddingLeft: 22,
+            marginBottom: 44,
           }}
         >
           <div
             style={{
-              fontSize: sizeParam === "story" ? 36 : 40,
+              fontSize: 30,
               color: EARTH,
-              lineHeight: 1.3,
+              lineHeight: 1.35,
               display: "flex",
+              fontStyle: "italic",
             }}
           >
-            {truncate(portrait.summary, 320)}
+            {truncate(portrait.summary, 200)}
           </div>
         </div>
 
-        {/* Patterns chips \u2014 only if we have them */}
-        {patterns.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 40,
-            }}
-          >
-            {patterns.map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: 18,
-                  color: EARTH,
-                  backgroundColor: "rgba(212, 168, 67, 0.2)",
-                  padding: "8px 16px",
-                  display: "flex",
-                }}
-              >
-                {p}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Counts row */}
+        {/* 2×2 editorial grid — one artifact from each mode. Hairline dividers. */}
         <div
           style={{
             display: "flex",
-            borderTop: `1px solid ${EARTH_30}`,
-            paddingTop: 32,
-            marginBottom: 24,
+            flexDirection: "column",
+            borderTop: `1px solid ${EARTH_20}`,
+            flex: 1,
           }}
         >
-          {[
-            { label: "Tracks", value: tracks },
-            { label: "Paths", value: paths },
-            { label: "Encounters", value: encounters },
-            { label: "Moments", value: notices },
-          ].map((c) => (
-            <div
-              key={c.label}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 52,
-                  color: EARTH,
-                  lineHeight: 1,
-                  marginBottom: 8,
-                  display: "flex",
-                }}
-              >
-                {c.value}
-              </div>
-              <div
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: 14,
-                  color: EARTH_60,
-                  letterSpacing: 3,
-                  textTransform: "uppercase",
-                  display: "flex",
-                }}
-              >
-                {c.label}
-              </div>
-            </div>
-          ))}
+          <ModeRow
+            left={{ label: "Track", line: trackLine }}
+            right={{ label: "Path", line: pathLine }}
+            earth={EARTH}
+            earth40={EARTH_40}
+            earth20={EARTH_20}
+          />
+          <ModeRow
+            left={{ label: "Question", line: questionLine }}
+            right={{ label: "Moment", line: momentLine }}
+            earth={EARTH}
+            earth40={EARTH_40}
+            earth20={EARTH_20}
+            last
+          />
         </div>
 
-        {/* Footer \u2014 attribution + brand */}
+        {/* Single subtle counts line */}
+        <div
+          style={{
+            display: "flex",
+            borderTop: `1px solid ${EARTH_20}`,
+            paddingTop: 20,
+            marginTop: 24,
+            marginBottom: 16,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontSize: 14,
+              color: EARTH_40,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+            }}
+          >
+            {countsLine}
+          </span>
+        </div>
+
+        {/* Footer — attribution + wordmark */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            marginTop: "auto",
-            paddingTop: 32,
+            paddingTop: 12,
           }}
         >
           <div
             style={{
               fontFamily: "monospace",
-              fontSize: 16,
+              fontSize: 14,
               color: EARTH_60,
               display: "flex",
+              letterSpacing: 2,
+              textTransform: "uppercase",
             }}
           >
             {displayName}
           </div>
           <div
             style={{
-              fontSize: 28,
-              color: EARTH,
-              letterSpacing: -0.5,
               display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            trace
+            <div
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 999,
+                backgroundColor: AMBER,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 26,
+                color: EARTH,
+                letterSpacing: -0.3,
+                display: "flex",
+              }}
+            >
+              trace
+            </span>
           </div>
         </div>
       </div>
@@ -268,10 +286,102 @@ export async function GET(req: NextRequest) {
   );
 }
 
+/**
+ * Two-column row inside the editorial grid. A thin hairline sits below each
+ * row (suppressed on the last row) and between the two cells for that
+ * classic index-card feel.
+ */
+function ModeRow({
+  left,
+  right,
+  earth,
+  earth40,
+  earth20,
+  last,
+}: {
+  left: { label: string; line: string };
+  right: { label: string; line: string };
+  earth: string;
+  earth40: string;
+  earth20: string;
+  last?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flex: 1,
+        borderBottom: last ? "none" : `1px solid ${earth20}`,
+        paddingTop: 28,
+        paddingBottom: 28,
+      }}
+    >
+      <ModeCell label={left.label} line={left.line} earth={earth} earth40={earth40} />
+      <div
+        style={{
+          width: 1,
+          display: "flex",
+          backgroundColor: earth20,
+          marginLeft: 24,
+          marginRight: 24,
+        }}
+      />
+      <ModeCell label={right.label} line={right.line} earth={earth} earth40={earth40} />
+    </div>
+  );
+}
+
+function ModeCell({
+  label,
+  line,
+  earth,
+  earth40,
+}: {
+  label: string;
+  line: string;
+  earth: string;
+  earth40: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "monospace",
+          fontSize: 11,
+          color: earth40,
+          letterSpacing: 3,
+          textTransform: "uppercase",
+          marginBottom: 10,
+          display: "flex",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 22,
+          color: earth,
+          lineHeight: 1.3,
+          display: "flex",
+        }}
+      >
+        {truncate(line, 90)}
+      </div>
+    </div>
+  );
+}
+
 function dimsFor(size: string): { width: number; height: number } {
-  if (size === "square") return { width: 1200, height: 1200 };
+  if (size === "square") return { width: 1080, height: 1080 };
   if (size === "story") return { width: 1080, height: 1920 };
-  return { width: 1200, height: 1500 }; // default portrait 4:5
+  return { width: 1080, height: 1350 }; // default portrait 4:5
 }
 
 function truncate(s: string, max: number): string {
