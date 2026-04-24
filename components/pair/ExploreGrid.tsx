@@ -188,12 +188,12 @@ export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[]
           </p>
         </div>
       ) : (
-        <div className="columns-2 md:columns-3 lg:columns-4 gap-px space-y-px">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px">
           {filtered.map((pairing) => (
             <button
               key={pairing.id}
               onClick={() => setOpenId(pairing.id)}
-              className="break-inside-avoid group relative overflow-hidden bg-earth/5 w-full text-left"
+              className="group relative overflow-hidden bg-earth/5 w-full text-left"
             >
               <div className="relative w-full" style={{ paddingBottom: "100%" }}>
                 <Image
