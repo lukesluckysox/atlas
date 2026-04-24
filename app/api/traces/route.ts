@@ -213,17 +213,67 @@ export async function GET(req: NextRequest) {
     const last = page[page.length - 1];
     const nextBefore = hasMore && last ? last.when.toISOString() : null;
 
-    // Counts reflect only the current page (cheap, honest). For global counts
-    // we'd need a separate COUNT query; skipping for now since chips use these
-    // only when `before` is absent (first page) and the UI shows them as a
-    // relative indicator, not a total.
-    const counts = {
-      tracks: page.filter((t) => t.kind === "tracks").length,
-      path: page.filter((t) => t.kind === "path").length,
-      notice: page.filter((t) => t.kind === "notice").length,
-      encounter: page.filter((t) => t.kind === "encounter").length,
-      total: page.length,
+    // Real counts. Scoped to the current filter set (kind + since + q) but
+    // NOT the `before` cursor, so chip numbers stay stable while paging.
+    // Only run counts on the first page (when no `before` is present) —
+    // subsequent pages reuse the initial numbers client-side.
+    let counts = {
+      tracks: 0,
+      path: 0,
+      notice: 0,
+      encounter: 0,
+      total: 0,
     };
+    if (!before) {
+      const countSinceFilter = since ? { gte: since } : undefined;
+      const countDateFilter = (field: "createdAt" | "date") =>
+        countSinceFilter ? { [field]: countSinceFilter } : {};
+      const [tc, pc, nc, ec] = await Promise.all([
+        kinds.has("tracks")
+          ? prisma.pairing.count({
+              where: {
+                userId,
+                ...countDateFilter("createdAt"),
+                ...(q ? pairingQueryFilter(q) : {}),
+              },
+            })
+          : Promise.resolve(0),
+        kinds.has("path")
+          ? prisma.experience.count({
+              where: {
+                userId,
+                ...countDateFilter("createdAt"),
+                ...(q ? experienceQueryFilter(q) : {}),
+              },
+            })
+          : Promise.resolve(0),
+        kinds.has("notice")
+          ? prisma.mark.count({
+              where: {
+                userId,
+                ...countDateFilter("createdAt"),
+                ...(q ? markQueryFilter(q) : {}),
+              },
+            })
+          : Promise.resolve(0),
+        kinds.has("encounter")
+          ? prisma.encounter.count({
+              where: {
+                userId,
+                ...countDateFilter("date"),
+                ...(q ? encounterQueryFilter(q) : {}),
+              },
+            })
+          : Promise.resolve(0),
+      ]);
+      counts = {
+        tracks: tc,
+        path: pc,
+        notice: nc,
+        encounter: ec,
+        total: tc + pc + nc + ec,
+      };
+    }
 
     return NextResponse.json({
       traces: page,
