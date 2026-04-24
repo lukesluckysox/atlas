@@ -31,6 +31,7 @@ export function SmartCapture() {
   const [photoName, setPhotoName] = useState<string | null>(null);
   const [kindOverride, setKindOverride] = useState<DetectedKind | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying>(null);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     null
   );
@@ -39,12 +40,25 @@ export function SmartCapture() {
   const router = useRouter();
 
   // Ambient now-playing check. Best-effort; fails silent.
+  // API shape: { connected, playing, track: { id, name, artist, albumArt } }
   useEffect(() => {
     let cancelled = false;
     fetch("/api/spotify/now-playing")
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!cancelled && j?.id) setNowPlaying(j);
+        if (cancelled || !j) return;
+        setSpotifyConnected(Boolean(j.connected));
+        if (j.connected && j.playing && j.track) {
+          setNowPlaying({
+            id: j.track.id,
+            name: j.track.name,
+            artist: j.track.artist,
+            albumArt: j.track.albumArt,
+            playing: true,
+          });
+        } else {
+          setNowPlaying(null);
+        }
       })
       .catch(() => {});
     return () => {
@@ -86,28 +100,37 @@ export function SmartCapture() {
     const content = text.trim();
     setSaving(true);
     try {
-      if (detected === "track" && nowPlaying) {
-        // Track capture uses the paired endpoint. Photo optional; falls back
-        // to album art via the API's quick path.
-        const res = await submitWithQueue({
-          kind: "track",
-          endpoint: "/api/pairings",
-          payload: {
-            photoUrl: photo,
-            spotifyTrackId: nowPlaying.id,
-            trackName: nowPlaying.name,
-            artistName: nowPlaying.artist,
-            albumArt: nowPlaying.albumArt,
-            note: content || null,
-            latitude: coords?.lat,
-            longitude: coords?.lng,
-            quick: !photo,
-          },
-        });
-        if (!res.ok) throw new Error(res.error || "save failed");
-        toast.success(res.offline ? "saved offline" : "tracked");
-        reset();
-        if (!res.offline) router.refresh();
+      if (detected === "track") {
+        if (nowPlaying) {
+          // Track capture uses the paired endpoint. Photo optional; falls back
+          // to album art via the API's quick path.
+          const res = await submitWithQueue({
+            kind: "track",
+            endpoint: "/api/pairings",
+            payload: {
+              photoUrl: photo,
+              spotifyTrackId: nowPlaying.id,
+              trackName: nowPlaying.name,
+              artistName: nowPlaying.artist,
+              albumArt: nowPlaying.albumArt,
+              note: content || null,
+              latitude: coords?.lat,
+              longitude: coords?.lng,
+              quick: !photo,
+            },
+          });
+          if (!res.ok) throw new Error(res.error || "save failed");
+          toast.success(res.offline ? "saved offline" : "tracked");
+          reset();
+          if (!res.offline) router.refresh();
+          return;
+        }
+        // No active now-playing — hand off to the full /pair page so the user
+        // can search a track, attach a photo, etc. Pre-fill any text as note.
+        const params = new URLSearchParams();
+        if (content) params.set("note", content);
+        if (photo) params.set("photo", photo);
+        router.push(`/pair${params.toString() ? `?${params.toString()}` : ""}`);
         return;
       }
 
@@ -164,8 +187,8 @@ export function SmartCapture() {
 
   return (
     <section className="border border-earth/15 bg-parchment p-4 md:p-5 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <KindChip
             active={detected === "moment" || detected === "moment-photo"}
             onClick={() => setKindOverride("moment")}
@@ -173,25 +196,16 @@ export function SmartCapture() {
           />
           <KindChip
             active={detected === "track"}
-            onClick={() =>
-              nowPlaying
-                ? setKindOverride("track")
-                : toast("link Spotify on Tracks first", { icon: "♫" })
-            }
+            onClick={() => setKindOverride("track")}
             label="Track"
-            hint={!nowPlaying}
           />
           <KindChip
             active={detected === "path"}
             onClick={() => setKindOverride("path")}
             label="Path"
           />
+          {spotifyConnected && <NowPlayingPill track={nowPlaying} />}
         </div>
-        {nowPlaying?.playing && (
-          <p className="text-[11px] font-mono uppercase tracking-widest text-amber">
-            ♫ {nowPlaying.name.slice(0, 24)}
-          </p>
-        )}
       </div>
 
       <textarea
@@ -263,12 +277,10 @@ function KindChip({
   active,
   onClick,
   label,
-  hint,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
-  hint?: boolean;
 }) {
   return (
     <button
@@ -278,10 +290,39 @@ function KindChip({
         active
           ? "bg-earth text-parchment border-earth"
           : "text-earth/50 border-earth/20 hover:border-earth/50"
-      } ${hint ? "opacity-60" : ""}`}
+      }`}
     >
       {label}
     </button>
+  );
+}
+
+// Connection/now-playing pill. Sits in-line with kind chips.
+// - Spotify connected, nothing playing: live dot + "spotify"
+// - Spotify connected, playing: live dot + "now playing: <track>"
+// No album art — deliberately text-only so it stays on the same line.
+function NowPlayingPill({ track }: { track: NowPlaying }) {
+  const playing = Boolean(track?.playing && track.name);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] border border-amber/40 text-amber max-w-[55%] md:max-w-[40%]"
+      title={playing ? `${track!.name} — ${track!.artist}` : "Spotify connected"}
+    >
+      <span className="relative flex h-1.5 w-1.5 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber opacity-60" />
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber" />
+      </span>
+      <span className="truncate font-mono">
+        {playing ? (
+          <>
+            <span className="uppercase tracking-[0.2em]">now playing:</span>{" "}
+            <span className="normal-case tracking-normal">{track!.name}</span>
+          </>
+        ) : (
+          <span className="uppercase tracking-[0.2em]">spotify</span>
+        )}
+      </span>
+    </span>
   );
 }
 
