@@ -82,12 +82,23 @@ export function SmartCapture() {
 
   async function onPhoto(file: File) {
     try {
-      // Upload via existing /api/upload endpoint
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      if (!res.ok) throw new Error("upload failed");
-      const j = (await res.json()) as { url: string };
+      // /api/upload expects { image: <base64 data URL>, folder } as JSON,
+      // not multipart. Convert first, then POST. (Multipart was a bug that
+      // made every home-screen photo-track save fail on upload.)
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error("read failed"));
+        r.readAsDataURL(file);
+      });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl, folder: "tracks" }),
+      });
+      if (!res.ok) throw new Error(`upload ${res.status}`);
+      const j = (await res.json()) as { url?: string };
+      if (!j.url) throw new Error("upload no url");
       setPhoto(j.url);
       setPhotoName(file.name);
     } catch {
@@ -161,8 +172,11 @@ export function SmartCapture() {
       toast.success(res.offline ? "saved offline" : "noted");
       reset();
       if (!res.offline) router.refresh();
-    } catch {
-      toast.error("couldn't save");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown";
+      // Surface the real reason — "couldn't save" with no context has been
+      // hiding real bugs (e.g. upload 400s, missing fields).
+      toast.error(`couldn't save: ${msg.slice(0, 80)}`);
     } finally {
       setSaving(false);
     }
