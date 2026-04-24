@@ -323,11 +323,11 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   const [activeField, setActiveField] = useState<"name" | "city">("name");
 
   // Debounced place autocomplete — driven by either `name` or `city`.
-  // For state/country, we suppress name autocomplete: the user types the
-  // region freely, shading comes from our boundary lookup, and an optional
-  // city picker (rendered below) supplies the pin coords.
-  const nameSuggestsByType = form.type !== "state" && form.type !== "country";
-  const query = form.type === "concert" ? form.city : nameSuggestsByType ? form.name : "";
+  // Every destination field autocompletes, including state/country. For
+  // regions we still don't store lat/lng (they render as polygons), but
+  // the user gets spelling confirmation + a canonical label from Nominatim
+  // instead of a silent dead field.
+  const query = form.type === "concert" ? form.city : form.name;
   useEffect(() => {
     if (suggestionsLocked.current) {
       suggestionsLocked.current = false;
@@ -999,6 +999,9 @@ function LogPanel({
   const isRoad = form.type === "road";
   const isRegion = form.type === "state" || form.type === "country";
   const [showMore, setShowMore] = useState(false);
+  // Free-text filter for the type grid. Scoped to LogPanel so it resets
+  // with the panel and doesn't leak between open/close.
+  const [typeQuery, setTypeQuery] = useState("");
 
   // Auto-expand "More details" when an optional field already has content,
   // so editing an entry pre-reveals what's filled.
@@ -1064,8 +1067,38 @@ function LogPanel({
       <div className="p-6 space-y-5">
         <div>
           <p className="label mb-3">Type</p>
+          <div className="relative mb-3">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-earth/40 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={typeQuery}
+              onChange={(e) => setTypeQuery(e.target.value)}
+              placeholder="Filter types…"
+              className="w-full bg-transparent border border-earth/10 focus:border-earth/40 py-2 pl-9 pr-8 font-mono text-xs text-earth placeholder:text-earth/40 focus:outline-none transition-colors"
+              autoComplete="off"
+            />
+            {typeQuery && (
+              <button
+                type="button"
+                onClick={() => setTypeQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-earth/40 hover:text-earth"
+                aria-label="Clear filter"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            {EXPERIENCE_TYPES.filter((t) => t.value !== "notice").map((type) => (
+            {EXPERIENCE_TYPES.filter((t) => t.value !== "notice")
+              .filter((t) =>
+                typeQuery.trim() === ""
+                  ? true
+                  : t.label.toLowerCase().includes(typeQuery.trim().toLowerCase())
+              )
+              .map((type) => (
               <button
                 key={type.value}
                 onClick={() =>
@@ -1090,6 +1123,15 @@ function LogPanel({
                 {type.label}
               </button>
             ))}
+            {EXPERIENCE_TYPES.filter((t) => t.value !== "notice").filter((t) =>
+              typeQuery.trim() === ""
+                ? true
+                : t.label.toLowerCase().includes(typeQuery.trim().toLowerCase())
+            ).length === 0 && (
+              <p className="col-span-2 font-mono text-xs text-earth/40 py-3 text-center">
+                No types match “{typeQuery}”
+              </p>
+            )}
           </div>
         </div>
 
@@ -1135,13 +1177,16 @@ function LogPanel({
                 longitude: isRegion ? null : hit.longitude,
               }));
             }}
-            // Drive the existing shared autocomplete dropdown.
-            showSuggestions={!isRegion && showSuggestions}
+            // Drive the existing shared autocomplete dropdown. Even for
+            // regions (country/state) we surface suggestions so users can
+            // verify spelling against Nominatim — we just don't store the
+            // returned lat/lng since regions render as polygons, not pins.
+            showSuggestions={showSuggestions}
             setShowSuggestions={setShowSuggestions}
             suggestions={suggestions}
             onPick={selectSuggestion}
             searching={searching}
-            allowAutocomplete={!isRegion}
+            allowAutocomplete={true}
           />
         )}
 
