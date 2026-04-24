@@ -3,8 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Camera, MapPin, Image as ImageIcon } from "lucide-react";
+import { Camera, MapPin, Image as ImageIcon, Search } from "lucide-react";
 import { submitWithQueue } from "@/lib/offline-submit";
+
+interface PlaceSuggestion {
+  id: string;
+  name: string;
+  location: string;
+  latitude: number;
+  longitude: number;
+  kind: string;
+}
 
 // Single input on Home that infers the trace kind from what you give it:
 // - Starts with "@" or includes a place query + picks from suggestions -> Path
@@ -36,6 +45,10 @@ export function SmartCapture() {
     null
   );
   const [saving, setSaving] = useState(false);
+  // Path autocomplete state — only fires when the detected kind is "path".
+  const [pathSuggestions, setPathSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [showPathSuggestions, setShowPathSuggestions] = useState(false);
+  const [pathSearching, setPathSearching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -79,6 +92,57 @@ export function SmartCapture() {
   }, []);
 
   const detected: DetectedKind = kindOverride ?? detect(text, photo);
+
+  // Debounced place search when Path is the active kind. Keeps the dead
+  // destination rule: any text the user types in a destination field has
+  // to be searchable.
+  useEffect(() => {
+    if (detected !== "path") {
+      setPathSuggestions([]);
+      setShowPathSuggestions(false);
+      return;
+    }
+    const raw = text.trim().replace(/^@/, "").trim();
+    if (raw.length < 2) {
+      setPathSuggestions([]);
+      setShowPathSuggestions(false);
+      return;
+    }
+    setPathSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/places/search?q=${encodeURIComponent(raw)}`
+        );
+        const data: { results?: PlaceSuggestion[] } = await res.json();
+        setPathSuggestions(data.results ?? []);
+        setShowPathSuggestions(true);
+      } catch {
+        setPathSuggestions([]);
+      } finally {
+        setPathSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [text, detected]);
+
+  // Push a path selection to /map with full context so the log panel opens
+  // prefilled — the user just confirms type + saves. Free-text hand-off
+  // (no selection) still works; /map opens the panel with name prefilled.
+  function handOffToMap(opts: { selection?: PlaceSuggestion; freeText?: string }) {
+    const params = new URLSearchParams({ new: "1" });
+    if (opts.selection) {
+      const s = opts.selection;
+      params.set("q", s.name);
+      params.set("location", s.location);
+      params.set("lat", String(s.latitude));
+      params.set("lng", String(s.longitude));
+      if (s.kind) params.set("kind", s.kind);
+    } else if (opts.freeText) {
+      params.set("q", opts.freeText);
+    }
+    router.push(`/map?${params.toString()}`);
+  }
 
   async function onPhoto(file: File) {
     try {
@@ -146,9 +210,15 @@ export function SmartCapture() {
       }
 
       if (detected === "path") {
-        // Hand off to the Paths page with the text pre-filled as the query.
-        const q = encodeURIComponent(content);
-        router.push(`/map?new=1&q=${q}`);
+        // Prefer a resolved suggestion when one is visible — the top match is
+        // almost always what the user means. Otherwise free-text hand-off.
+        const raw = content.replace(/^@/, "").trim();
+        const top = pathSuggestions[0];
+        if (top && topMatches(top, raw)) {
+          handOffToMap({ selection: top });
+        } else {
+          handOffToMap({ freeText: raw || content });
+        }
         return;
       }
 
@@ -229,6 +299,51 @@ export function SmartCapture() {
         rows={2}
         className="w-full bg-transparent border-none outline-none resize-none text-earth placeholder:text-earth/40 font-serif text-lg leading-relaxed"
       />
+
+      {/* Path autocomplete — only renders when kind is Path and there's
+          something to search for. Mirrors the /map log panel suggestion
+          style so the handoff feels continuous. */}
+      {detected === "path" && (showPathSuggestions || pathSearching) && (
+        <div className="border-t border-earth/10 -mx-4 md:-mx-5">
+          {pathSearching && pathSuggestions.length === 0 && (
+            <div className="px-4 py-3 flex items-center gap-2 text-earth/40">
+              <Search className="w-3 h-3 animate-pulse" />
+              <span className="font-mono text-xs">searching…</span>
+            </div>
+          )}
+          {pathSuggestions.length > 0 && (
+            <ul className="max-h-56 overflow-y-auto">
+              {pathSuggestions.slice(0, 6).map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => handOffToMap({ selection: s })}
+                    className="w-full text-left px-4 py-2.5 hover:bg-earth/5 transition-colors border-b border-earth/5 last:border-b-0 flex items-start gap-3"
+                  >
+                    <MapPin className="w-3 h-3 mt-1 text-amber shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-serif text-sm text-earth truncate">
+                        {s.name}
+                      </p>
+                      <p className="font-mono text-[11px] text-earth/50 truncate">
+                        {s.location}
+                      </p>
+                    </div>
+                    <span className="font-mono text-[9px] uppercase tracking-widest text-earth/30 shrink-0 mt-1.5">
+                      {s.kind}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!pathSearching && pathSuggestions.length === 0 && text.trim().length >= 2 && (
+            <div className="px-4 py-2.5 font-mono text-xs text-earth/40">
+              no matches — tap Trace it to log as free text
+            </div>
+          )}
+        </div>
+      )}
 
       {photo && (
         <div className="flex items-center justify-between text-xs text-earth/60 border-t border-earth/10 pt-2">
@@ -338,6 +453,16 @@ function NowPlayingPill({ track }: { track: NowPlaying }) {
       </span>
     </span>
   );
+}
+
+// True if the top Nominatim result looks close enough to what the user typed
+// that auto-selecting it won't feel wrong. Nominatim returns very loose
+// matches for short queries, so we only auto-accept when the prefix matches.
+function topMatches(top: PlaceSuggestion, raw: string): boolean {
+  if (!raw) return false;
+  const a = top.name.toLowerCase();
+  const b = raw.toLowerCase();
+  return a.startsWith(b) || b.startsWith(a) || a.includes(b);
 }
 
 // Pure detection helper; also exported for tests if we add them later.

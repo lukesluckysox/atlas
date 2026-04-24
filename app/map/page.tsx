@@ -6,9 +6,32 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ExperienceMap } from "@/components/map/ExperienceMap";
 import { lookupBoundary } from "@/lib/boundaries";
 
-export default async function MapPage() {
+// Map accepts a ?new=1&q=...&lat=...&lng=...&location=...&kind=... hand-off
+// from /home. When present, ExperienceMap opens the log panel prefilled.
+export default async function MapPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
+
+  const sp = searchParams ? await searchParams : {};
+  const pick = (k: string): string | null => {
+    const v = sp[k];
+    if (Array.isArray(v)) return v[0] ?? null;
+    return v ?? null;
+  };
+  const initial =
+    pick("new") === "1" && pick("q")
+      ? {
+          q: pick("q")!,
+          location: pick("location"),
+          lat: pick("lat") ? Number(pick("lat")) : null,
+          lng: pick("lng") ? Number(pick("lng")) : null,
+          kind: pick("kind"),
+        }
+      : null;
 
   const [experiences, geoMarks, roads] = await Promise.all([
     prisma.experience.findMany({
@@ -79,6 +102,7 @@ export default async function MapPage() {
         experiences={mergedForClient}
         stats={stats}
         isPro={session.user.isPro}
+        initial={initial}
         roads={roads.map((r) => ({
           id: r.id,
           name: r.name,

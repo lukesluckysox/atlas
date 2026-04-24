@@ -122,6 +122,15 @@ interface Props {
   stats: { total: number; countries: number; nationalParks: number; concerts: number };
   isPro: boolean;
   roads?: RoadStretch[];
+  // Hand-off from /home SmartCapture. When present, the log panel auto-opens
+  // prefilled so the user just confirms the type and saves.
+  initial?: {
+    q: string;
+    location: string | null;
+    lat: number | null;
+    lng: number | null;
+    kind: string | null;
+  } | null;
 }
 
 interface FormState {
@@ -160,7 +169,34 @@ const INITIAL_FORM: FormState = {
 
 const FILTER_STORAGE_KEY = "trace:map-filter";
 
-export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) {
+// Map a Nominatim / API kind string into one of our Experience types.
+// The /api/places/search endpoint returns `type` from OSM (e.g. "city",
+// "administrative", "peak", "stadium", "national_park"). Trace uses its
+// own narrower set. Unknown kinds fall back to `landmark` so the form
+// still opens with a sensible default the user can override.
+function normalizeHandoffKind(kind: string | null): string {
+  if (!kind) return "landmark";
+  const k = kind.toLowerCase();
+  if (k === "country") return "country";
+  if (k === "state" || k === "administrative" || k === "region") return "state";
+  if (k === "city" || k === "town" || k === "village") return "landmark";
+  if (k.includes("national_park") || k === "national park") return "national_park";
+  if (k === "trail" || k === "path" || k === "hiking") return "trail";
+  if (k === "peak" || k === "mountain" || k === "summit") return "peak";
+  if (k === "beach" || k === "coast" || k === "shore") return "beach";
+  if (k === "stadium" || k === "arena" || k === "sports_centre") return "stadium";
+  if (k === "restaurant" || k === "cafe" || k === "bar" || k === "pub")
+    return "restaurant";
+  return "landmark";
+}
+
+export function ExperienceMap({
+  experiences,
+  stats,
+  isPro,
+  roads = [],
+  initial = null,
+}: Props) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -383,6 +419,35 @@ export function ExperienceMap({ experiences, stats, isPro, roads = [] }: Props) 
   };
 
   const resetForm = () => setForm(INITIAL_FORM);
+
+  // One-shot: open the log panel prefilled when /home hands us a query.
+  // We normalize the Nominatim `kind` string into one of our Experience
+  // types (country/state/national_park/trail/...). Unknown kinds default
+  // to `landmark` so the form still opens with sensible save behavior.
+  const initialHandledRef = useRef(false);
+  useEffect(() => {
+    if (initialHandledRef.current) return;
+    if (!initial || !initial.q) return;
+    initialHandledRef.current = true;
+    const normalizedType = normalizeHandoffKind(initial.kind);
+    setForm({
+      ...INITIAL_FORM,
+      type: normalizedType,
+      name: initial.q,
+      location: initial.location ?? "",
+      latitude: initial.lat,
+      longitude: initial.lng,
+    });
+    setShowForm(true);
+    // Strip the query params so a refresh doesn't re-open the panel.
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      ["new", "q", "location", "lat", "lng", "kind"].forEach((k) =>
+        url.searchParams.delete(k)
+      );
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, [initial]);
 
   const handleSave = async () => {
     // Road: distinct save path — POST to /api/roads with start/end coords.
