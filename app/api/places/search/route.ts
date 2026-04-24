@@ -16,6 +16,7 @@ type ExperienceType =
   | "country"
   | "national_park"
   | "state"
+  | "city"
   | "concert"
   | "trail"
   | "moment"
@@ -62,6 +63,7 @@ function buildQuery(rawQ: string, type: ExperienceType | null): string {
       return /beach|coast|shore/i.test(q) ? q : `${q} beach`;
     case "country":
     case "state":
+    case "city":
     case "trail":
     case "concert":
     case "moment":
@@ -85,6 +87,11 @@ function buildUrl(q: string, type: ExperienceType | null): string {
     params.set("featuretype", "country");
   } else if (type === "state") {
     params.set("featuretype", "state");
+  } else if (type === "city") {
+    // Bias toward populated places for concert-city lookups and the
+    // road start/end pickers. Nominatim's "city" featuretype is a useful
+    // hint but not exclusive — smaller towns still come through.
+    params.set("featuretype", "city");
   }
 
   return `https://nominatim.openstreetmap.org/search?${params.toString()}`;

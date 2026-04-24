@@ -1,8 +1,9 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { MapPin, X, RefreshCw } from "lucide-react";
+import { MapPin, X, RefreshCw, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useEffect, useMemo, useState } from "react";
 
@@ -49,12 +50,36 @@ function moodOf(p: Pairing): Mood | null {
 }
 
 export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[] }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [pairings, setPairings] = useState<Pairing[]>(initialPairings);
   const [mood, setMood] = useState<Mood>("all");
   const [openId, setOpenId] = useState<string | null>(null);
 
+  // Honor ?open={id} so the Archive's "view this track" links (which route
+  // to /explore?open=...) actually open the Lightbox on arrival. Clearing
+  // the param after opening keeps the URL clean when the user closes.
+  useEffect(() => {
+    const want = searchParams?.get("open");
+    if (want && pairings.some((p) => p.id === want)) {
+      setOpenId(want);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const updatePairing = (id: string, patch: Partial<Pairing>) =>
     setPairings((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+
+  const removePairing = (id: string) =>
+    setPairings((ps) => ps.filter((p) => p.id !== id));
+
+  const handleClose = () => {
+    setOpenId(null);
+    // Strip ?open= if present so refreshing doesn't re-open.
+    if (searchParams?.get("open")) {
+      router.replace("/explore", { scroll: false });
+    }
+  };
 
   // Count per mood (for chip badges). Only shows chips that actually have
   // entries — no point offering empty filters.
@@ -227,8 +252,12 @@ export function ExploreGrid({ pairings: initialPairings }: { pairings: Pairing[]
       {openPairing && (
         <Lightbox
           pairing={openPairing}
-          onClose={() => setOpenId(null)}
+          onClose={handleClose}
           onUpdate={(patch) => updatePairing(openPairing.id, patch)}
+          onDeleted={(id) => {
+            removePairing(id);
+            handleClose();
+          }}
         />
       )}
     </div>
@@ -239,18 +268,38 @@ function Lightbox({
   pairing,
   onClose,
   onUpdate,
+  onDeleted,
 }: {
   pairing: Pairing;
   onClose: () => void;
   onUpdate: (patch: Partial<Pairing>) => void;
+  onDeleted: (id: string) => void;
 }) {
   const m = moodOf(pairing);
   const moodLabel = m
     ? MOOD_CHIPS.find((c) => c.value === m)?.label
     : null;
   const [captionBusy, setCaptionBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const showCaption =
     pairing.caption && !pairing.captionDismissed;
+
+  const deletePairing = async () => {
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/pairings/${pairing.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("delete failed");
+      toast.success("Removed.");
+      onDeleted(pairing.id);
+    } catch {
+      toast.error("Could not remove. Try again.");
+      setDeleteBusy(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const refreshCaption = async () => {
     setCaptionBusy(true);
@@ -283,15 +332,20 @@ function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-earth/92 flex items-center justify-center p-4 md:p-10 animate-fade-in"
+      className="fixed inset-0 z-50 bg-earth/92 flex items-center justify-center p-4 md:p-10 animate-fade-in overflow-y-auto"
       onClick={onClose}
     >
+      {/* Close: sticky in the top-right, sized for thumbs, clear of notches */}
       <button
         onClick={onClose}
         aria-label="Close"
-        className="absolute top-6 right-6 text-parchment/70 hover:text-parchment transition-colors"
+        className="fixed z-[60] w-11 h-11 rounded-full bg-earth/70 backdrop-blur-sm border border-parchment/20 text-parchment flex items-center justify-center hover:bg-earth/90 active:scale-95 transition-all"
+        style={{
+          top: "calc(env(safe-area-inset-top, 0px) + 1rem)",
+          right: "calc(env(safe-area-inset-right, 0px) + 1rem)",
+        }}
       >
-        <X size={22} />
+        <X size={20} />
       </button>
 
       <div
@@ -394,6 +448,36 @@ function Lightbox({
                   {moodLabel}
                 </p>
               </div>
+            )}
+          </div>
+
+          {/* Delete — two-tap confirm. Removes from Tracks and Archive alike. */}
+          <div className="pt-4 border-t border-earth/10">
+            {confirmDelete ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={deletePairing}
+                  disabled={deleteBusy}
+                  className="font-mono text-[11px] uppercase tracking-widest text-parchment bg-terracotta px-3 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {deleteBusy ? "Removing…" : "Confirm delete"}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleteBusy}
+                  className="font-mono text-[11px] uppercase tracking-widest text-earth/60 hover:text-earth transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-terracotta/80 hover:text-terracotta transition-colors"
+              >
+                <Trash2 size={12} />
+                Delete pairing
+              </button>
             )}
           </div>
         </div>

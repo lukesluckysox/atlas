@@ -1,11 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { format, formatDistanceToNow } from "date-fns";
-import { Search, Music2, MapPin, Eye, HelpCircle } from "lucide-react";
+import { Search, Music2, MapPin, Eye, HelpCircle, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { Trace, TraceKind } from "@/lib/trace";
 import { AddToCollection } from "@/components/collections/AddToCollection";
+import { TraceLightbox } from "@/components/archive/TraceLightbox";
+
+// ─── Delete endpoint map ──────────────────────────────────────────────────
+// Each kind has its own REST resource. Encounters aren't deletable (they're
+// time-bound questions tied to a half-day window), so they fall through to
+// null and the UI hides the delete affordance for them.
+const DELETE_PATH: Record<TraceKind, ((id: string) => string) | null> = {
+  tracks: (id) => `/api/pairings/${id}`,
+  path: (id) => `/api/experiences/${id}`,
+  notice: (id) => `/api/marks/${id}`,
+  encounter: null,
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -67,21 +79,96 @@ const KIND_META: Record<
   encounter: { label: "Encounter", Icon: HelpCircle },
 };
 
-function TraceCard({ trace, isPro }: { trace: Trace; isPro: boolean }) {
+function TraceCard({
+  trace,
+  isPro,
+  onOpen,
+  onDeleted,
+}: {
+  trace: Trace;
+  isPro: boolean;
+  onOpen: () => void;
+  onDeleted: (kind: TraceKind, id: string) => void;
+}) {
   const { Icon, label } = KIND_META[trace.kind];
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const deleteUrl = DELETE_PATH[trace.kind]?.(trace.id);
+
+  const stop = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+  };
+
+  const doDelete = async (e: React.MouseEvent) => {
+    stop(e);
+    if (!deleteUrl) return;
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(deleteUrl, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+      toast.success("Removed.");
+      onDeleted(trace.kind, trace.id);
+    } catch {
+      toast.error("Could not remove. Try again.");
+      setDeleteBusy(false);
+      setConfirmDelete(false);
+    }
+  };
 
   return (
-    <Link
-      href={trace.href}
-      className="block border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group relative"
+    <button
+      onClick={onOpen}
+      className="block w-full text-left border border-earth/10 bg-parchment hover:border-earth/30 transition-colors group relative"
     >
-      {/* AddToCollection lives inside the Link — it stops propagation so
-          clicks on the icon don't trigger the card navigation. */}
-      {isPro && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <AddToCollection kind={trace.kind} refId={trace.id} isPro={isPro} />
-        </div>
-      )}
+      {/* Top-right action cluster — stopPropagation so clicks don't open the pop-out. */}
+      <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+        {isPro && (
+          <div
+            onClick={stop}
+            className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+          >
+            <AddToCollection kind={trace.kind} refId={trace.id} isPro={isPro} />
+          </div>
+        )}
+        {deleteUrl && (
+          confirmDelete ? (
+            <div
+              onClick={stop}
+              className="flex items-center gap-1 bg-parchment border border-terracotta/40 px-1.5 py-1 shadow-sm"
+            >
+              <button
+                onClick={doDelete}
+                disabled={deleteBusy}
+                className="font-mono text-[10px] uppercase tracking-widest text-terracotta hover:bg-terracotta hover:text-parchment px-1.5 py-0.5 transition-colors disabled:opacity-50"
+              >
+                {deleteBusy ? "…" : "Delete"}
+              </button>
+              <button
+                onClick={(e) => {
+                  stop(e);
+                  setConfirmDelete(false);
+                }}
+                disabled={deleteBusy}
+                className="font-mono text-[10px] uppercase tracking-widest text-earth/50 hover:text-earth px-1.5 py-0.5 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => {
+                stop(e);
+                setConfirmDelete(true);
+              }}
+              aria-label="Delete entry"
+              // Always visible on touch (no hover), polished fade on desktop.
+              className="opacity-70 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity bg-parchment border border-earth/15 hover:border-terracotta text-earth/50 hover:text-terracotta p-1.5"
+            >
+              <Trash2 size={12} />
+            </button>
+          )
+        )}
+      </div>
       <div className="flex">
         {/* Photo strip (if any) */}
         {trace.photoUrl && (
@@ -139,7 +226,7 @@ function TraceCard({ trace, isPro }: { trace: Trace; isPro: boolean }) {
           )}
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
@@ -191,6 +278,25 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
     encounter: 0,
     total: 0,
   });
+
+  // Which entry is currently popped out. The index is into the traces array,
+  // which is already reverse-chrono (newest first), so prev/next in the
+  // Lightbox walks chronologically through the feed the user is looking at.
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  // Optimistic remove when a card's delete succeeds. The row is gone from the
+  // DB so the next refresh wouldn't show it anyway — this just keeps the UI
+  // in sync without a round-trip. Counts are decremented locally too.
+  const removeTrace = (kind: TraceKind, id: string) => {
+    setTraces((prev) =>
+      prev.filter((t) => !(t.kind === kind && t.id === id))
+    );
+    setCounts((prev) => ({
+      ...prev,
+      [kind]: Math.max(0, prev[kind] - 1),
+      total: Math.max(0, prev.total - 1),
+    }));
+  };
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -444,9 +550,20 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
                 {format(new Date(day), "EEEE, MMMM d, yyyy")}
               </p>
               <div className="space-y-2">
-                {items.map((t) => (
-                  <TraceCard key={`${t.kind}-${t.id}`} trace={t} isPro={isPro} />
-                ))}
+                {items.map((t) => {
+                  const idx = traces.findIndex(
+                    (x) => x.kind === t.kind && x.id === t.id
+                  );
+                  return (
+                    <TraceCard
+                      key={`${t.kind}-${t.id}`}
+                      trace={t}
+                      isPro={isPro}
+                      onOpen={() => setOpenIndex(idx)}
+                      onDeleted={removeTrace}
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -474,6 +591,19 @@ export function ArchiveFeed({ isPro = false }: { isPro?: boolean } = {}) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Chrono pop-out. Kept inside ArchiveFeed so it shares the same traces
+          array (navigating prev/next walks the exact feed the user is on,
+          filters and all). */}
+      {openIndex !== null && traces[openIndex] && (
+        <TraceLightbox
+          traces={traces}
+          index={openIndex}
+          onClose={() => setOpenIndex(null)}
+          onNavigate={setOpenIndex}
+          onDeleted={removeTrace}
+        />
       )}
     </div>
   );

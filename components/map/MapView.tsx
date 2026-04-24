@@ -110,6 +110,7 @@ export default function MapView({
   onDelete,
   selectedId,
   onSelect,
+  flyToKey,
   onLongPress,
   roads = [],
   selectedRoadId,
@@ -121,6 +122,13 @@ export default function MapView({
   onDelete?: (id: string) => void;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  /**
+   * Opt-in camera move. When this key changes (id or nonce), the map
+   * flies to that experience. selectedId controls which popup is open.
+   * Keeping them separate lets marker taps show the card in place (no
+   * zoom) while drawer row taps zoom + open the popup together.
+   */
+  flyToKey?: { id: string; nonce: number } | null;
   onLongPress?: (lat: number, lng: number) => void;
   roads?: RoadStretch[];
   selectedRoadId?: string | null;
@@ -221,7 +229,7 @@ export default function MapView({
           </Polyline>
         );
       })}
-      <PanToSelected experiences={validExps} selectedId={selectedId ?? null} />
+      <PanToSelected experiences={validExps} flyToKey={flyToKey ?? null} />
       <FitToRoad roads={roads} selectedRoadId={selectedRoadId ?? null} />
       {draftMarker && <DraftPin marker={draftMarker} />}
       {onLongPress && <LongPressCatcher onFire={onLongPress} />}
@@ -493,24 +501,28 @@ function DraftPin({
 }
 
 /**
- * Pan/zoom to the selected experience. Separate component because
- * react-leaflet hooks must live inside MapContainer.
+ * Pan/zoom to a specific experience on demand. Re-fires whenever flyToKey
+ * changes — including to the same id with a new nonce — so callers can
+ * request the same entry twice in a row without the effect dropping it.
+ * Separate component because react-leaflet hooks must live inside
+ * MapContainer.
  */
 function PanToSelected({
   experiences,
-  selectedId,
+  flyToKey,
 }: {
   experiences: Experience[];
-  selectedId: string | null;
+  flyToKey: { id: string; nonce: number } | null;
 }) {
   const map = useMap();
   useEffect(() => {
-    if (!selectedId) return;
-    const exp = experiences.find((e) => e.id === selectedId);
+    if (!flyToKey) return;
+    const exp = experiences.find((e) => e.id === flyToKey.id);
     if (!exp || !exp.latitude || !exp.longitude) return;
     const targetZoom = Math.max(map.getZoom(), 10);
     map.flyTo([exp.latitude, exp.longitude], targetZoom, { duration: 0.6 });
-  }, [selectedId, experiences, map]);
+    // nonce is part of the key so clicking the same row twice re-fires.
+  }, [flyToKey, experiences, map]);
   return null;
 }
 
