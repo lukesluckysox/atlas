@@ -137,6 +137,10 @@ export default function MapView({
   draftMarker?: { lat: number; lng: number; label?: string } | null;
 }) {
   const validExps = experiences.filter((e) => e.latitude && e.longitude);
+  // Region rows (state/country) render as polygons via BoundaryLayer. They
+  // must NOT receive a marker — even if they somehow have coords, a dot
+  // dropped at a polygon's centroid is visual noise with no meaning.
+  const pinExps = validExps.filter((e) => e.type !== "state" && e.type !== "country");
   const center: [number, number] =
     validExps.length > 0
       ? [validExps[0].latitude!, validExps[0].longitude!]
@@ -179,7 +183,7 @@ export default function MapView({
         });
       })}
       <ZoomAwareLayer
-        experiences={validExps}
+        experiences={pinExps}
         onDelete={onDelete}
         selectedId={selectedId ?? null}
         onSelect={onSelect}
@@ -229,7 +233,7 @@ export default function MapView({
           </Polyline>
         );
       })}
-      <PanToSelected experiences={validExps} flyToKey={flyToKey ?? null} />
+      <PanToSelected experiences={pinExps} flyToKey={flyToKey ?? null} />
       <FitToRoad roads={roads} selectedRoadId={selectedRoadId ?? null} />
       {draftMarker && <DraftPin marker={draftMarker} />}
       {onLongPress && <LongPressCatcher onFire={onLongPress} />}
