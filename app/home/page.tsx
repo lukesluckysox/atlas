@@ -6,83 +6,74 @@ import { AppShell } from "@/components/layout/AppShell";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
 
-// Align with /api/encounter — two 12-hour windows a day, UTC-anchored.
-function currentWindowStart(): Date {
-  const d = new Date();
-  const hours = d.getUTCHours() < 12 ? 0 : 12;
-  d.setUTCHours(hours, 0, 0, 0);
-  return d;
-}
+// Home shows the ONE most recent of every kind (track, path, question,
+// moment). Archive is where the full feeds live. The idea is that Home is
+// the pulse — what's latest, what's today, what's next — not a scrollable
+// history. No overlap with Archive.
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
+  const userId = session.user.id;
 
-  // Local day boundary (server runs UTC; client shows user's day). We
-  // approximate "today" with the UTC day window, which is close enough for
-  // the today-strip. The strip forgives minor drift.
-  const startOfToday = new Date();
-  startOfToday.setUTCHours(0, 0, 0, 0);
-
-  const [
-    recentPairings,
-    experienceCount,
-    encounterToday,
-    recentMarks,
-    pairingsToday,
-    marksToday,
-    latestExperience,
-    roadsCount,
-    roadsMiles,
-  ] = await Promise.all([
-    prisma.pairing.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-    }),
-    prisma.experience.count({ where: { userId: session.user.id } }),
-    prisma.encounter.findFirst({
-      where: {
-        userId: session.user.id,
-        date: { gte: currentWindowStart() },
-      },
-    }),
-    prisma.mark.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 3,
-    }),
-    prisma.pairing.count({
-      where: { userId: session.user.id, createdAt: { gte: startOfToday } },
-    }),
-    prisma.mark.count({
-      where: { userId: session.user.id, createdAt: { gte: startOfToday } },
-    }),
-    prisma.experience.findFirst({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-      select: { name: true, location: true },
-    }),
-    prisma.highwayStretch.count({ where: { userId: session.user.id } }),
-    prisma.highwayStretch.aggregate({
-      where: { userId: session.user.id },
-      _sum: { distanceMi: true },
-    }),
-  ]);
+  const [latestPairing, latestExperience, latestEncounter, latestMark] =
+    await Promise.all([
+      prisma.pairing.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          photoUrl: true,
+          trackName: true,
+          artistName: true,
+          albumArt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.experience.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          location: true,
+          photoUrl: true,
+          createdAt: true,
+        },
+      }),
+      prisma.encounter.findFirst({
+        where: { userId },
+        orderBy: { date: "desc" },
+        select: {
+          id: true,
+          question: true,
+          answer: true,
+          landed: true,
+          sittingWith: true,
+          date: true,
+        },
+      }),
+      prisma.mark.findFirst({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          content: true,
+          photoUrl: true,
+          createdAt: true,
+        },
+      }),
+    ]);
 
   return (
     <AppShell>
       <OnboardingGate />
       <HomeDashboard
-        recentPairings={recentPairings}
-        experienceCount={experienceCount}
-        encounterToday={encounterToday}
-        recentMarks={recentMarks}
-        pairingsToday={pairingsToday}
-        marksToday={marksToday}
+        latestPairing={latestPairing}
         latestExperience={latestExperience}
-        roadsCount={roadsCount}
-        roadsMiles={Math.round(roadsMiles._sum.distanceMi ?? 0)}
+        latestEncounter={latestEncounter}
+        latestMark={latestMark}
       />
     </AppShell>
   );
