@@ -42,14 +42,44 @@ function loadJson(file: string): FeatureCollection | null {
 
 function buildStatesIndex(): Map<string, Geometry> {
   if (statesIndex) return statesIndex;
-  const fc = loadJson("us-states.geojson");
   const idx = new Map<string, Geometry>();
-  if (fc) {
-    for (const f of fc.features) {
+
+  // US states first (high-quality, canonical names) — preferred for US lookups.
+  const us = loadJson("us-states.geojson");
+  if (us) {
+    for (const f of us.features) {
       const name = (f.properties?.name as string) || "";
       if (name) idx.set(norm(name), f.geometry);
     }
   }
+
+  // World admin-1 (Natural Earth): Canadian provinces, Mexican states,
+  // every other country's first-level subdivisions. Indexed by every name
+  // field we can find so "Quebec", "Québec", "Baja California Sur", etc.
+  // all resolve. Doesn't overwrite US entries (keeps US-file quality).
+  const world = loadJson("world-admin1.geojson");
+  if (world) {
+    for (const f of world.features) {
+      const p = f.properties || {};
+      const names: string[] = [];
+      for (const key of ["name", "name_en", "name_local", "name_alt", "gn_name", "woe_name"]) {
+        const v = p[key];
+        if (typeof v === "string" && v) names.push(v);
+        // name_alt often packs multiple pipe-separated labels.
+        if (typeof v === "string" && v.includes("|")) {
+          for (const piece of v.split("|")) {
+            const t = piece.trim();
+            if (t) names.push(t);
+          }
+        }
+      }
+      for (const n of names) {
+        const k = norm(n);
+        if (k && !idx.has(k)) idx.set(k, f.geometry);
+      }
+    }
+  }
+
   statesIndex = idx;
   return idx;
 }
