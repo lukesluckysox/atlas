@@ -161,12 +161,16 @@ export default function MapView({
       {experiences.flatMap((e) => {
         if (!e.boundary) return [];
         const key = `boundary-${e.id}`;
+        // Countries render as a bolder "been here" fill so a world-zoom view
+        // reads at a glance; states stay subtle so the US doesn't look painted
+        // when many are logged.
+        const isCountry = e.type === "country";
         const pathOpts = {
-          color: "#D4A843",
-          weight: 1,
-          opacity: 0.9,
-          fillColor: "#D4A843",
-          fillOpacity: 0.15,
+          color: isCountry ? "#B8912F" : "#D4A843",
+          weight: isCountry ? 1.5 : 1,
+          opacity: 0.95,
+          fillColor: isCountry ? "#D4A843" : "#D4A843",
+          fillOpacity: isCountry ? 0.4 : 0.15,
         };
         if (e.boundary.type === "Polygon") {
           const rings = e.boundary.coordinates.map((ring) =>
